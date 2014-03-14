@@ -1,5 +1,5 @@
 [gerrit]
-host=review.openstack.org
+host=openstratus-gerrit-3993.phx-os1.stratus.dev.ebay.com
 port=29418
-project=openstack/neutron.git
+project=C3/neutron.git
 defaultbranch=stable/havana
