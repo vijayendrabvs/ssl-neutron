@@ -56,6 +56,10 @@ OPTS = [
         help=_('Limit number of leases to prevent a denial-of-service.')),
     cfg.StrOpt('interface_driver',
                help=_("The driver used to manage the virtual interface.")),
+
+    cfg.StrOpt('device_host_id', default=socket.gethostname(),
+               help="Identifier for this host used in generating device id "
+                    "for this host on the network")
 ]
 
 IPV4 = 4
@@ -571,8 +575,8 @@ class DeviceManager(object):
         """Return a unique DHCP device ID for this host on the network."""
         # There could be more than one dhcp server per network, so create
         # a device id that combines host and network ids
-
-        host_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, socket.gethostname())
+        LOG.debug("Using device_host_id=%s" % cfg.CONF.device_host_id)
+        host_uuid = uuid.uuid5(uuid.NAMESPACE_DNS, cfg.CONF.device_host_id)
         return 'dhcp%s-%s' % (host_uuid, network.id)
 
     def _get_device(self, network):
