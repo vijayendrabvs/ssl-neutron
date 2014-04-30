@@ -497,13 +497,18 @@ class SecurityGroupDbMixin(ext_sg.SecurityGroupPluginBase):
         if p.get('device_owner') and p['device_owner'].startswith('network:'):
             return
 
-        valid_groups = self.get_security_groups(context, fields=['id'])
-        valid_group_map = dict((g['id'], g['id']) for g in valid_groups)
-        try:
-            return set([valid_group_map[sg_id]
-                        for sg_id in p.get(ext_sg.SECURITYGROUPS, [])])
-        except KeyError as e:
-            raise ext_sg.SecurityGroupNotFound(id=str(e))
+        port_sg = p.get(ext_sg.SECURITYGROUPS, [])
+        if len(port_sg) > 0:
+            filters = {'id', port_sg}
+            valid_groups = self.get_security_groups(context, fields=['id'],
+                                                    filters=filters)
+
+            try:
+                return set([g['id'] for g in valid_groups])
+            except KeyError as e:
+                raise ext_sg.SecurityGroupNotFound(id=str(e))
+
+        return set()
 
     def _ensure_default_security_group_on_port(self, context, port):
         # we don't apply security groups for dhcp, router
