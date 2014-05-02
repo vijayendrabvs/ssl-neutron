@@ -499,7 +499,7 @@ class SecurityGroupDbMixin(ext_sg.SecurityGroupPluginBase):
 
         port_sg = p.get(ext_sg.SECURITYGROUPS, [])
         if len(port_sg) > 0:
-            filters = {'id', port_sg}
+            filters = {'id': port_sg}
             valid_groups = self.get_security_groups(context, fields=['id'],
                                                     filters=filters)
 
