@@ -22,6 +22,14 @@ Neutron base exception handling.
 _FATAL_EXCEPTION_FORMAT_ERRORS = False
 
 
+# Clients may not be importing neutron.common.exception
+# after installing gettext, so we mask _ with a NOOP function here to avoid
+# NameErrors being raised.
+import __builtin__
+if not hasattr(__builtin__, '_'):
+    setattr(__builtin__, '_', lambda x: x)
+
+
 class NeutronException(Exception):
     """Base Neutron Exception.
 
