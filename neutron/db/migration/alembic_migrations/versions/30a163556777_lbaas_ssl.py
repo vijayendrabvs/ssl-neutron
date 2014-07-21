@@ -29,10 +29,7 @@ down_revision = 'havana'
 
 # Change to ['*'] if this migration applies to all plugins
 
-# migration_for_plugins = ['*']
-migration_for_plugins = [
-    'neutron.plugins.nicira.nicira_nvp_plugin.NeutronPlugin.NvpPluginV2'
-]
+migration_for_plugins = ['*']
 
 from alembic import op
 import sqlalchemy as sa
