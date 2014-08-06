@@ -56,6 +56,7 @@ AUTO_DELETE_PORT_OWNERS = ['network:dhcp']
 
 
 class CommonDbMixin(object):
+
     """Common methods used in core and service plugins."""
     # Plugins, mixin classes implementing extension will register
     # hooks into the dict below for "augmenting" the "core way" of
@@ -167,7 +168,7 @@ class CommonDbMixin(object):
     def _apply_dict_extend_functions(self, resource_type,
                                      response, db_object):
         for func in self._dict_extend_functions.get(
-            resource_type, []):
+                resource_type, []):
             args = (response, db_object)
             if isinstance(func, basestring):
                 func = getattr(self, func, None)
@@ -210,9 +211,16 @@ class CommonDbMixin(object):
             return getattr(self, '_get_%s' % resource)(context, marker)
         return None
 
+    @classmethod
+    def register_dict_extend_funcs(cls, resource, funcs):
+        cur_funcs = cls._dict_extend_functions.get(resource, [])
+        cur_funcs.extend(funcs)
+        cls._dict_extend_functions[resource] = cur_funcs
+
 
 class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
                         CommonDbMixin):
+
     """V2 Neutron plugin interface implementation using SQLAlchemy models.
 
     Whenever a non-read call happens the plugin will call an event handler
@@ -234,12 +242,6 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
         #                and not call into this class's __init__.
         #                This connection is setup as memory for the tests.
         db.configure_db()
-
-    @classmethod
-    def register_dict_extend_funcs(cls, resource, funcs):
-        cur_funcs = cls._dict_extend_functions.get(resource, [])
-        cur_funcs.extend(funcs)
-        cls._dict_extend_functions[resource] = cur_funcs
 
     def _filter_non_model_columns(self, data, model):
         """Remove all the attributes from data which are not columns of
@@ -670,7 +672,7 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
         for original_ip in original_ips[:]:
             for new_ip in new_ips[:]:
                 if ('ip_address' in new_ip and
-                    original_ip['ip_address'] == new_ip['ip_address']):
+                        original_ip['ip_address'] == new_ip['ip_address']):
                     original_ips.remove(original_ip)
                     new_ips.remove(new_ip)
                     prev_ips.append(original_ip)
@@ -877,7 +879,7 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
         # raise if multiple tenants found or if the only tenant found
         # is not the owner of the network
         if (len(tenant_ids) > 1 or len(tenant_ids) == 1 and
-            tenant_ids.pop() != original.tenant_id):
+                tenant_ids.pop() != original.tenant_id):
             raise q_exc.InvalidSharedSetting(network=original.name)
 
     def _make_network_dict(self, network, fields=None,
@@ -1441,8 +1443,8 @@ class NeutronDbPluginV2(neutron_plugin_base_v2.NeutronPluginBaseV2,
             subnet = self._get_subnet(context, a['subnet_id'])
             # Check if IP was allocated from allocation pool
             if NeutronDbPluginV2._check_ip_in_allocation_pool(
-                context, a['subnet_id'], subnet['gateway_ip'],
-                a['ip_address']):
+                    context, a['subnet_id'], subnet['gateway_ip'],
+                    a['ip_address']):
                 NeutronDbPluginV2._recycle_ip(context,
                                               a['network_id'],
                                               a['subnet_id'],

@@ -75,9 +75,14 @@ class ProtocolMismatch(qexception.BadRequest):
     message = _("Protocol %(vip_proto)s does not match "
                 "pool protocol %(pool_proto)s")
 
+VIPS = 'vips'
+POOLS = 'pools'
+MEMBERS = 'members'
+HEALTH_MONITORS = 'health_monitors'
+
 
 RESOURCE_ATTRIBUTE_MAP = {
-    'vips': {
+    VIPS: {
         'id': {'allow_post': False, 'allow_put': False,
                'validate': {'type:uuid': None},
                'is_visible': True,
@@ -138,7 +143,7 @@ RESOURCE_ATTRIBUTE_MAP = {
         'status_description': {'allow_post': False, 'allow_put': False,
                                'is_visible': True}
     },
-    'pools': {
+    POOLS: {
         'id': {'allow_post': False, 'allow_put': False,
                'validate': {'type:uuid': None},
                'is_visible': True,
@@ -186,7 +191,7 @@ RESOURCE_ATTRIBUTE_MAP = {
         'status_description': {'allow_post': False, 'allow_put': False,
                                'is_visible': True}
     },
-    'members': {
+    MEMBERS: {
         'id': {'allow_post': False, 'allow_put': False,
                'validate': {'type:uuid': None},
                'is_visible': True,
@@ -219,7 +224,7 @@ RESOURCE_ATTRIBUTE_MAP = {
         'status_description': {'allow_post': False, 'allow_put': False,
                                'is_visible': True}
     },
-    'health_monitors': {
+    HEALTH_MONITORS: {
         'id': {'allow_post': False, 'allow_put': False,
                'validate': {'type:uuid': None},
                'is_visible': True,
@@ -270,7 +275,7 @@ RESOURCE_ATTRIBUTE_MAP = {
 }
 
 SUB_RESOURCE_ATTRIBUTE_MAP = {
-    'health_monitors': {
+    HEALTH_MONITORS: {
         'parent': {'collection_name': 'pools',
                    'member_name': 'pool'},
         'parameters': {'id': {'allow_post': True, 'allow_put': False,

@@ -25,14 +25,15 @@ METERING = "METERING"
 L3_ROUTER_NAT = "L3_ROUTER_NAT"
 
 
-#maps extension alias to service type
+# maps extension alias to service type
 EXT_TO_SERVICE_MAPPING = {
     'dummy': DUMMY,
     'lbaas': LOADBALANCER,
     'fwaas': FIREWALL,
     'vpnaas': VPN,
     'metering': METERING,
-    'router': L3_ROUTER_NAT
+    'router': L3_ROUTER_NAT,
+    'lbaas-ssl': LOADBALANCER,
 }
 
 # TODO(salvatore-orlando): Move these (or derive them) from conf file

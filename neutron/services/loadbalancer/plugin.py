@@ -19,19 +19,25 @@ from neutron.api.v2 import attributes as attrs
 from neutron.common import exceptions as n_exc
 from neutron import context
 from neutron.db import api as qdbapi
+from neutron.db.loadbalancer import lbaas_ssl_db as ssldb
 from neutron.db.loadbalancer import loadbalancer_db as ldb
 from neutron.db import servicetype_db as st_db
 from neutron.openstack.common import log as logging
 from neutron.plugins.common import constants
 from neutron.services.loadbalancer import agent_scheduler
+from neutron.services.loadbalancer.drivers import (
+    abstract_ssl_extension_driver as abs_ssl_driver)
 from neutron.services import provider_configuration as pconf
 from neutron.services import service_base
+from neutron.extensions import lbaas_ssl
 
 LOG = logging.getLogger(__name__)
 
 
 class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
-                         agent_scheduler.LbaasAgentSchedulerDbMixin):
+                         agent_scheduler.LbaasAgentSchedulerDbMixin,
+                         ssldb.LBaasSSLDbMixin):
+
     """Implementation of the Neutron Loadbalancer Service Plugin.
 
     This class manages the workflow of LBaaS request/response.
@@ -40,7 +46,8 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
     """
     supported_extension_aliases = ["lbaas",
                                    "lbaas_agent_scheduler",
-                                   "service-type"]
+                                   "service-type",
+                                   "lbaas-ssl"]
 
     # lbaas agent notifiers to handle agent update operations;
     # can be updated by plugin drivers while loading;
@@ -97,6 +104,27 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
             raise n_exc.Invalid(_("Error retrieving provider for pool %s") %
                                 pool_id)
 
+    def _get_driver_for_vip_ssl(self, context, vip_id):
+        vip = self.get_vip(context, vip_id)
+        pool = self.get_pool(context, vip['pool_id'])
+        if pool['provider']:
+            try:
+                driver = self.drivers[pool['provider']]
+                if not issubclass(
+                    driver.__class__,
+                    abs_ssl_driver.LBaaSAbstractSSLDriver
+                ):
+                    raise n_exc.ExtensionNotSupportedByProvider(
+                        extension_name='lbaas-ssl',
+                        provider_name=pool['provider'])
+                return driver
+            except KeyError:
+                raise n_exc.Invalid(_("Error retrieving provider for "
+                                      "vip's %s SSL configuration"), vip_id)
+        else:
+            raise n_exc.Invalid(_("Error retrieving provider for vip %s"),
+                                vip_id)
+
     def get_plugin_type(self):
         return constants.LOADBALANCER
 
@@ -129,9 +157,147 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
         driver = self._get_driver_for_pool(context, v['pool_id'])
         driver.delete_vip(context, v)
 
+    def create_ssl_certificate(self, context, ssl_certificate):
+        ssl_cert = ssl_certificate['ssl_certificate']
+        new_cert = super(
+            LoadBalancerPlugin,
+            self).create_ssl_certificate(
+            context,
+            ssl_cert)
+        return new_cert
+
+    def delete_ssl_certificate(self, context, id):
+        super(LoadBalancerPlugin, self).delete_ssl_certificate(context, id)
+
+    def get_ssl_certificate(self, context, cert_id, fields=None):
+        res = super(
+            LoadBalancerPlugin,
+            self).get_ssl_certificate(
+            context,
+            cert_id,
+            fields)
+        return res
+
+    def get_ssl_certificates(self, context, filters=None, fields=None):
+        res = super(
+            LoadBalancerPlugin,
+            self).get_ssl_certificates(
+            context,
+            filters,
+            fields)
+        return res
+
+    def update_ssl_certificate(self, context, id, ssl_certificate):
+        ssl_cert = ssl_certificate['ssl_certificate']
+        res = super(
+            LoadBalancerPlugin,
+            self).update_ssl_certificate(
+            context,
+            id,
+            ssl_certificate)
+
+    def create_vip_ssl_certificate_association(self, context,
+                                               vip_ssl_certificate_association):
+        assoc = vip_ssl_certificate_association[
+            'vip_ssl_certificate_association']
+        cert_id = assoc['cert_id']
+        vip_id = assoc['vip_id']
+        key_id = assoc['key_id']
+        cert_chain_id = assoc['cert_chain_id']
+        tenant_id = assoc['tenant_id']
+        # First check if this association already exists for this tenant.
+        exists = super(LoadBalancerPlugin, self).find_vip_ssl_cert_assoc(context,
+                                                                         cert_id,
+                                                                         vip_id,
+                                                                         key_id,
+                                                                         cert_chain_id)
+        if exists:
+            raise lbaas_ssl.VipSSLCertificateAssociationExists()
+        # Else go ahead and create it.
+        # At this stage, assoc will not have device_ip to begin with. So set it
+        # to none explicitly.
+        assoc['device_ip'] = ''
+        assoc_db = super(
+            LoadBalancerPlugin,
+            self).create_vip_ssl_certificate_association(
+            context,
+            assoc)
+        vip_db = self.get_vip(context, vip_id)
+        cert_db = self.get_ssl_certificate(context, cert_id)
+        if cert_chain_id:
+            cert_chain_db = self.get_ssl_certificate_chain(
+                context,
+                cert_chain_id)
+        else:
+            cert_chain_db = None
+        key_db = self.get_ssl_certificate_key(context, key_id)
+        driver = self._get_driver_for_vip_ssl(context, vip_id)
+        driver.create_vip_ssl_certificate_association(
+            context,
+            assoc_db,
+            cert_db,
+            key_db,
+            vip_db,
+            cert_chain_db)
+        return assoc_db
+
+    def delete_vip_ssl_certificate_association(
+            self, context, vip_ssl_certificate_association):
+        assoc_id = vip_ssl_certificate_association
+        # First, get the vip_id of this association.
+        assoc_db = super(
+            LoadBalancerPlugin,
+            self)._get_vip_ssl_cert_assoc_by_id(
+            context,
+            assoc_id)
+        vip_id = assoc_db['vip_id']
+        cert_id = assoc_db['cert_id']
+        cert_chain_id = assoc_db['cert_chain_id']
+        key_id = assoc_db['key_id']
+        res = super(LoadBalancerPlugin, self).delete_vip_ssl_certificate_association(
+            context, assoc_db)
+        vip_db = self.get_vip(context, vip_id)
+        cert_db = self.get_ssl_certificate(context, cert_id)
+        if cert_chain_id:
+            cert_chain_db = self.get_ssl_certificate_chain(
+                context,
+                cert_chain_id)
+        else:
+            cert_chain_db = None
+        key_db = self.get_ssl_certificate_key(context, key_id)
+        driver = self._get_driver_for_vip_ssl(context, vip_id)
+        driver.delete_vip_ssl_certificate_association(
+            context,
+            assoc_db,
+            cert_db,
+            key_db,
+            vip_db,
+            cert_chain_db)
+        return res
+
+    def get_vip_ssl_certificate_association(
+            self, context, assoc_id, fields=None):
+        res = super(
+            LoadBalancerPlugin,
+            self).get_vip_ssl_certificate_association(
+            context,
+            assoc_id,
+            fields)
+        return res
+
+    def get_vip_ssl_certificate_associations(
+            self, context, filters=None, fields=None):
+        res = super(
+            LoadBalancerPlugin,
+            self).get_vip_ssl_certificate_associations(
+            context,
+            filters,
+            fields)
+        return res
+
     def _get_provider_name(self, context, pool):
         if ('provider' in pool and
-            pool['provider'] != attrs.ATTR_NOT_SPECIFIED):
+                pool['provider'] != attrs.ATTR_NOT_SPECIFIED):
             provider_name = pconf.normalize_provider_name(pool['provider'])
             self.validate_provider(provider_name)
             return provider_name
@@ -149,8 +315,8 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
             context,
             constants.LOADBALANCER,
             provider_name, p['id'])
-        #need to add provider name to pool dict,
-        #because provider was not known to db plugin at pool creation
+        # need to add provider name to pool dict,
+        # because provider was not known to db plugin at pool creation
         p['provider'] = provider_name
         driver = self.drivers[provider_name]
         driver.create_pool(context, p)
