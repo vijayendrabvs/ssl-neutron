@@ -93,21 +93,6 @@ class VipSSLCertificateAssociation(model_base.BASEV2, models_v2.HasId,
 
 class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
 
-    """
-    def update_vip_ssl_assocs_status(self, context, vip_id,
-                                     status, status_description=None):
-        with context.session.begin(subtransactions=True):
-            assocs = self._get_vip_ssl_assocs(
-                context, VipSSLCertificateAssociation, vip_id)
-            assocs.extend(self._get_vip_ssl_assocs(
-                context, VipSSLTrustedCertificateAssociation, vip_id))
-            for assoc in assocs:
-                if assoc.status != status:
-                    assoc.status = status
-                if status_description or assoc['status_description']:
-                    assoc.status_description = status_description
-        """
-
     def _get_vip_ssl_cert_assoc_by_id(self, context, assoc_id):
         model = VipSSLCertificateAssociation
         query = self._model_query(context, model)
@@ -117,11 +102,27 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
         query = self._model_query(context, model)
         return query.filter(model.vip_id == vip_id).one()
 
-    def _get_vip_ssl_cert_assoc_by_cert_id(self, context, model, cert_id):
+    def _get_vip_ssl_cert_assoc_by_cert_id(self, context, cert_id, status):
+        model = VipSSLCertificateAssociation
         query = self._model_query(context, model)
         try:
-            assoc = query.filter(model.cert_id == cert_id).first()
+            if status:
+                assoc = query.filter(model.cert_id == cert_id, model.status == status).first()
+            else:
+                assoc = query.filter(model.cert_id == cert_id).first()
             return assoc
+        except exc.NoResultFound:
+            return None
+
+    def _get_vip_ssl_cert_assocs_by_cert_id(self, context, cert_id, status_set=None):
+        model = VipSSLCertificateAssociation
+        query = self._model_query(context, model)
+        try:
+            if status_set:
+                assocs = query.filter(model.cert_id == cert_id, model.status.in_(status_set)).all()
+            else:
+                assocs = query.filter(model.cert_id == cert_id).all()
+            return assocs
         except exc.NoResultFound:
             return None
 
@@ -149,20 +150,93 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
         except exc.NoResultFound:
             return None
 
-    def _get_vip_ssl_cert_assoc_by_cert_chain_id(
-            self, context, model, cert_chain_id):
+    def _get_pool_id_by_vip_id(self, context, vip_id):
+        vip_db_record = self._get_ssl_resource(context, lbaas_db.Vip, vip_id)
+        return vip_db_record['pool_id']
+
+    def _get_vip_ssl_cert_assocs_by_cert_chain_id(
+            self, context, cert_chain_id, status_set=None):
+        model = VipSSLCertificateAssociation
         query = self._model_query(context, model)
         try:
-            assoc = query.filter(model.cert_chain_id == cert_chain_id).one()
+            if status_set:
+                assocs = query.filter(model.cert_chain_id == cert_chain_id, model.status.in_(status_set)).all()
+            else:
+                assocs = query.filter(model.cert_chain_id == cert_chain_id).all()
+            return assocs
+        except exc.NoResultFound:
+            return None
+
+    def _get_vip_ssl_cert_assoc_by_cert_chain_id(
+            self, context, cert_chain_id, status=None):
+        model = VipSSLCertificateAssociation
+        query = self._model_query(context, model)
+        try:
+            if status:
+                assoc = query.filter(model.cert_chain_id == cert_chain_id, model.status == status).one()
+            else:
+                assoc = query.filter(model.cert_chain_id == cert_chain_id).first()
             return assoc
         except exc.NoResultFound:
             return None
 
-    def _get_vip_ssl_cert_assoc_by_key_id(self, context, model, key_id):
+    def _get_vip_ssl_cert_assocs_by_key_id(self, context, key_id, status_set=None):
+        model = VipSSLCertificateAssociation
         query = self._model_query(context, model)
         try:
-            assoc = query.filter(model.key_id == key_id).one()
+            if status_set:
+                assocs = query.filter(model.key_id == key_id, model.status.in_(status_set)).all()
+            else:
+                assocs = query.filter(model.key_id == key_id).all()
+            return assocs
+        except exc.NoResultFound:
+            return None
+
+    def _get_vip_ssl_cert_assoc_by_key_id(self, context, key_id, status=None):
+        model = VipSSLCertificateAssociation
+        query = self._model_query(context, model)
+        try:
+            if status:
+                assoc = query.filter(model.key_id == key_id, model.status == status).first()
+            else:
+                assoc = query.filter(model.key_id == key_id).first()
             return assoc
+        except exc.NoResultFound:
+            return None
+
+    def _get_ssl_cert_by_id(self, context, cert_id):
+        model = SSLCertificate
+        query = self._model_query(context, model)
+        try:
+            cert = query.filter(model.id == cert_id).first()
+            return cert
+        except exc.NoResultFound:
+            return None
+
+    def _get_ssl_cert_chain_by_id(self, context, cert_chain_id):
+        model = SSLCertificateChain
+        query = self._model_query(context, model)
+        try:
+            cert_chain = query.filter(model.id == cert_chain_id).first()
+            return cert_chain
+        except exc.NoResultFound:
+            return None
+
+    def _get_ssl_cert_key_by_id(self, context, key_id):
+        model = SSLCertificateKey
+        query = self._model_query(context, model)
+        try:
+            cert_key = query.filter(model.id == key_id).first()
+            return cert_key
+        except exc.NoResultFound:
+            return None
+
+    def _get_vip_by_id(self, context, vip_id):
+        model = lbaas_db.Vip
+        query = self._model_query(context, model)
+        try:
+            vip = query.filter(model.id == vip_id).first()
+            return vip
         except exc.NoResultFound:
             return None
 
@@ -240,6 +314,7 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
             context.session.add(certificate_db)
         return self._make_ssl_certificate_dict(certificate_db)
 
+    """
     def update_ssl_certificate(self, context, id, ssl_certificate):
         # Updation of an ssl cert only updates the db.
         # Associating a vip with this ssl cert will reconfigure
@@ -250,18 +325,18 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
             if certificate_db:
                 certificate_db.update(ssl_certificate)
             return self._make_ssl_certificate_dict(certificate_db)
+    """
 
     def delete_ssl_certificate(self, context, id):
         with context.session.begin(subtransactions=True):
             certificate = self._get_ssl_resource(context, SSLCertificate, id)
-
-            # TODO: Check if the cert is not being used before deleting!
-            #vip_ssl_assoc = self._get_ssl_resource(context, VipSSLCertificateAssociation, id)
-            vip_ssl_assoc = self._get_vip_ssl_cert_assoc_by_cert_id(
-                context,
-                VipSSLCertificateAssociation,
-                id)
-            if vip_ssl_assoc:
+            # If there are any vip ssl associations that are not in
+            # PENDING_DELETE or ERROR status (i.e., in ACTIVE/PENDING_CREATE/
+            # PENDING_UPDATE statuses), disallow deletion.
+            status_set = ['PENDING_CREATE', 'ACTIVE', 'PENDING_UPDATE']
+            vip_ssl_assocs = self._get_vip_ssl_cert_assocs_by_cert_id(
+                context, id, status_set)
+            if vip_ssl_assocs:
                 raise lbaas_ssl.SSLCertificateInUse(certificate_id=id)
             try:
                 context.session.delete(certificate)
@@ -278,8 +353,7 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
                                     self._make_ssl_certificate_dict,
                                     filters=filters, fields=fields)
 
-    def create_ssl_certificate_key(self, context, ssl_certificate_key):
-        cert_key = ssl_certificate_key['ssl_certificate_key']
+    def create_ssl_certificate_key(self, context, cert_key):
         tenant_id = self._get_tenant_id_for_create(context, cert_key)
         with context.session.begin(subtransactions=True):
             certificate_key_db = SSLCertificateKey(
@@ -291,6 +365,7 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
             context.session.add(certificate_key_db)
         return self._make_ssl_certificate_key_dict(certificate_key_db)
 
+    """
     def update_ssl_certificate_key(self, context, id, ssl_certificate_key):
         # Updation of an ssl cert only updates the db.
         # Associating a vip with this ssl cert will reconfigure
@@ -304,6 +379,7 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
             return self._make_ssl_certificate_key_dict(certificate_key_db)
         # TODO: Need to cascade these changes to the device in plugin.py that
         # calls this function.
+    """
 
     def delete_ssl_certificate_key(self, context, id):
         with context.session.begin(subtransactions=True):
@@ -311,14 +387,10 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
                 context,
                 SSLCertificateKey,
                 id)
-
-            # TODO: Check if the key is not being used before deleting!
-            #vip_ssl_assoc = self._get_ssl_resource(context, VipSSLCertificateAssociation, id)
-            vip_ssl_assoc = self._get_vip_ssl_cert_assoc_by_key_id(
-                context,
-                VipSSLCertificateAssociation,
-                id)
-            if vip_ssl_assoc:
+            status_set = ['PENDING_CREATE', 'ACTIVE', 'PENDING_UPDATE']
+            vip_ssl_assocs = self._get_vip_ssl_cert_assocs_by_key_id(
+                context, id, status_set)
+            if vip_ssl_assocs:
                 raise lbaas_ssl.SSLCertificateKeyInUse(cert_key_id=id)
             try:
                 context.session.delete(certificate_key)
@@ -335,8 +407,7 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
                                     self._make_ssl_certificate_key_dict,
                                     filters=filters, fields=fields)
 
-    def create_ssl_certificate_chain(self, context, ssl_certificate_chain):
-        cert_chain = ssl_certificate_chain['ssl_certificate_chain']
+    def create_ssl_certificate_chain(self, context, cert_chain):
         tenant_id = self._get_tenant_id_for_create(context, cert_chain)
         with context.session.begin(subtransactions=True):
             certificate_chain_db = SSLCertificateChain(
@@ -348,31 +419,56 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
             context.session.add(certificate_chain_db)
         return self._make_ssl_certificate_chain_dict(certificate_chain_db)
 
+    """
+    def update_vip_ssl_cert_association(self, context, assoc_record):
+        # We simply set the record to pending_update in this.
+        # The driver must set the status to either ACTIVE or
+        # error accordingly after duly updating the association
+        # on the LB device.
+        assoc_record['status'] = "PENDING_UPDATE"
+        if assoc_record['cert_chain_id']:
+            cert_chain_id = assoc_record['cert_chain_id']
+        else:
+            cert_chain_id = None
+        try:
+            with context.session.begin(subtransactions=True):
+                assoc_db = VipSSLCertificateAssociation(
+                    id=assoc_record['id'],
+                    tenant_id=assoc_record['tenant_id'],
+                    vip_id=assoc_record['vip_id'],
+                    cert_id=assoc_record['cert_id'],
+                    cert_chain_id=cert_chain_id,
+                    key_id=assoc_record['key_id'],
+                    device_ip=assoc_record['device_ip'],
+                    status=assoc_record['status'],
+                    status_description=''
+                )
+                context.session.merge(assoc_db)
+        except Exception as e:
+            raise lbaas_ssl.VipSSLCertificateException(assoc_id=id)
+        # Remember, this is the db layer, so the invoker of this function
+        # in the plugin layer will invoke the driver.
+
     def update_ssl_certificate_chain(self, context, id, ssl_certificate_chain):
         # Updation of an ssl cert only updates the db.
         # Associating a vip with this ssl cert will reconfigure
         # the cert on the device.
-        cert_chain = ssl_certificate_chain['ssl_certificate_chain']
         with context.session.begin(subtransactions=True):
             certificate_chain_db = self._get_ssl_resource(context,
                                                           SSLCertificateChain, id)
             if certificate_chain_db:
-                certificate_chain_db.update(cert_chain)
+                certificate_chain_db.update(ssl_certificate_chain)
             return self._make_ssl_certificate_chain_dict(certificate_chain_db)
+    """
 
     def delete_ssl_certificate_chain(self, context, id):
         with context.session.begin(subtransactions=True):
             certificate_chain = self._get_ssl_resource(
-                context,
-                SSLCertificateChain,
-                id)
-
-            # TODO: Check if the key is not being used before deleting!
-            vip_ssl_assoc = self._get_vip_ssl_cert_assoc_by_cert_chain_id(
-                context,
-                VipSSLCertificateAssociation,
-                id)
-            if vip_ssl_assoc:
+                context, SSLCertificateChain, id)
+            status_set = ['PENDING_CREATE', 'ACTIVE', 'PENDING_UPDATE']
+            vip_ssl_assocs = self._get_vip_ssl_cert_assocs_by_cert_chain_id(
+                context, id, status_set)
+            if vip_ssl_assocs:
                 raise lbaas_ssl.SSLCertificateChainInUse(cert_chain_id=id)
             try:
                 context.session.delete(certificate_chain)

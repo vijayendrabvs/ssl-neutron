@@ -345,6 +345,10 @@ class LbaasSSLPluginBase(ServicePluginBase):
         pass
 
     @abc.abstractmethod
+    def update_vip_ssl_certificate_association(self, context, vip_ssl_certificate_association):
+        pass
+
+    @abc.abstractmethod
     def get_vip_ssl_certificate_association(self, context, id, fields=None):
         pass
 

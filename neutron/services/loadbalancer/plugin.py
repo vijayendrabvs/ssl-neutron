@@ -166,8 +166,42 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
             ssl_cert)
         return new_cert
 
+    def create_ssl_certificate_chain(self, context, ssl_certificate_chain):
+        ssl_cert_chain = ssl_certificate_chain['ssl_certificate_chain']
+        new_cert_chain = super(
+            LoadBalancerPlugin,
+            self).create_ssl_certificate_chain(
+            context, ssl_cert_chain)
+        return new_cert_chain
+
+    def create_ssl_certificate_key(self, context, ssl_certificate_key):
+        ssl_cert_key = ssl_certificate_key['ssl_certificate_key']
+        new_cert_key = super(
+            LoadBalancerPlugin,
+            self).create_ssl_certificate_key(
+            context, ssl_cert_key)
+        return new_cert_key
+
+    def update_ssl_certificate_chain(self, context, id, ssl_certificate_chain):
+        # Don't support update for now.
+        pass
+
+    def update_vip_ssl_certificate_association(self, context, id, vip_ssl_certificate_association):
+        # Don't support update for now.
+        pass
+
     def delete_ssl_certificate(self, context, id):
         super(LoadBalancerPlugin, self).delete_ssl_certificate(context, id)
+
+    def delete_ssl_certificate_chain(self, context, id):
+        super(LoadBalancerPlugin, self).delete_ssl_certificate_chain(context, id)
+
+    def delete_ssl_certificate_key(self, context, id):
+        super(LoadBalancerPlugin, self).delete_ssl_certificate_key(context, id)
+
+    def update_ssl_certificate_key(self, context, id, ssl_certificate_key):
+        # Don't support update for now.
+        pass
 
     def get_ssl_certificate(self, context, cert_id, fields=None):
         res = super(
@@ -188,13 +222,8 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
         return res
 
     def update_ssl_certificate(self, context, id, ssl_certificate):
-        ssl_cert = ssl_certificate['ssl_certificate']
-        res = super(
-            LoadBalancerPlugin,
-            self).update_ssl_certificate(
-            context,
-            id,
-            ssl_certificate)
+        # Don't support update for now.
+        pass
 
     def create_vip_ssl_certificate_association(self, context,
                                                vip_ssl_certificate_association):
@@ -256,6 +285,7 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
         key_id = assoc_db['key_id']
         res = super(LoadBalancerPlugin, self).delete_vip_ssl_certificate_association(
             context, assoc_db)
+        # The above call to delete marks the record as PENDING_DELETE
         vip_db = self.get_vip(context, vip_id)
         cert_db = self.get_ssl_certificate(context, cert_id)
         if cert_chain_id:
@@ -266,13 +296,37 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
             cert_chain_db = None
         key_db = self.get_ssl_certificate_key(context, key_id)
         driver = self._get_driver_for_vip_ssl(context, vip_id)
+        # Check if key is used in any other association. If not,
+        # mark it for deletion on the LB device.
+        status_set = ['ACTIVE', 'PENDING_UPDATE', 'PENDING_CREATE']
+        assoc_sets = self._get_vip_ssl_cert_assocs_by_key_id(context, key_id, status_set)
+        if not assoc_sets:
+            key_delete_flag = True
+        else:
+            key_delete_flag = False
+
+        assoc_sets = self._get_vip_ssl_cert_assocs_by_cert_id(context, cert_id, status_set)
+        if not assoc_sets:
+            cert_delete_flag = True
+        else:
+            cert_delete_flag = False
+
+        assoc_sets = self._get_vip_ssl_cert_assocs_by_cert_chain_id(context, cert_chain_id, status_set)
+        if not assoc_sets:
+            cert_chain_delete_flag = True
+        else:
+            cert_chain_delete_flag = False
+
         driver.delete_vip_ssl_certificate_association(
             context,
             assoc_db,
             cert_db,
             key_db,
             vip_db,
-            cert_chain_db)
+            cert_chain_db,
+            cert_delete_flag,
+            cert_chain_delete_flag,
+            key_delete_flag)
         return res
 
     def get_vip_ssl_certificate_association(

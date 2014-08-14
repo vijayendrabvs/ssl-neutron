@@ -29,10 +29,18 @@ class LBaaSAbstractSSLDriver(object):
 
     @abc.abstractmethod
     def delete_vip_ssl_certificate_association(
-            self, context, assoc_db, cert_db, key_db, vip_db, cert_chain_db=None):
+            self, context, assoc_db, cert_db, key_db, vip_db,
+            cert_chain_db=None, cert_delete_flag=True,
+            cert_chain_delete_flag=True, key_delete_flag=True):
         pass
 
     @abc.abstractmethod
     def create_vip_ssl_certificate_association(self, context, assoc_db_record, cert_db_record,
                                                key_db_record, vip_db_record, cert_chain_db_record=None):
+        pass
+
+    @abc.abstractmethod
+    def update_vip_ssl_certificate_association(
+            self, context, assoc_db, cert_db, key_db, vip_db,
+            cert_chain_db=None):
         pass
