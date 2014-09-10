@@ -30,6 +30,25 @@ from neutron.services.loadbalancer.drivers import (
 from neutron.services import provider_configuration as pconf
 from neutron.services import service_base
 from neutron.extensions import lbaas_ssl
+from oslo.config import cfg
+from keystoneclient.v2_0.client import Client
+from keystoneclient.middleware import auth_token
+import json
+
+# List of subnets per VPC
+# The lbaas_vpc_vip_subnets is a dictionary of this form:
+# {
+#   'vpc_name1': ['subnet_uuid1', 'subnet_uuid2', ...],
+#   'vpc_name2': ['subnet_uuid1', 'subnet_uuid2', ...]
+#   ...
+# }
+lbaas_vpc_vip_subnets = [
+    cfg.StrOpt('lbaas_vpc_vip_subnets',
+                default='',
+                help='Subnets that VIPs can belong to, for a VPC.'),
+]
+
+cfg.CONF.register_opts(lbaas_vpc_vip_subnets)
 
 LOG = logging.getLogger(__name__)
 
@@ -60,6 +79,17 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
         qdbapi.register_models()
         self.service_type_manager = st_db.ServiceTypeManager.get_instance()
         self._load_drivers()
+
+        self.authhost = cfg.CONF.keystone_authtoken['auth_host']
+        self.keystone_admin_username = cfg.CONF.keystone_authtoken['admin_user']
+        self.keystone_pwd = cfg.CONF.keystone_authtoken['admin_password']
+        self.keystone_tenant_name = cfg.CONF.keystone_authtoken['admin_tenant_name']
+        self.auth_uri = "http://" + self.authhost + ":5000/v2.0"
+
+        self.keystone_client = Client(username=self.keystone_admin_username,
+                                    password=self.keystone_pwd,
+                                    tenant_name=self.keystone_tenant_name,
+                                    auth_url=self.auth_uri)
 
     def _load_drivers(self):
         """Loads plugin-drivers specified in configuration."""
@@ -132,6 +162,24 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
         return "Neutron LoadBalancer Service Plugin"
 
     def create_vip(self, context, vip):
+        requested_subnet = vip['vip']['subnet_id']
+        tenant_info = self.keystone_client.tenants.get(tenant_id=vip['vip']['tenant_id'])
+        tenant_info_dict = tenant_info.__dict__['_info']
+        if 'cos' not in tenant_info_dict:
+            raise n_exc.Invalid('Tenant not configured with a COS value!')
+
+        tenant_cos = tenant_info_dict['cos']
+        if not tenant_cos:
+            raise n_exc.Invalid('Tenant not configured with a COS value!')
+
+        all_cos_subnets_dict = json.loads(cfg.CONF.lbaas_vpc_vip_subnets)
+        if tenant_cos in all_cos_subnets_dict:
+            cos_subnet_list = all_cos_subnets_dict[tenant_cos]
+            if requested_subnet not in cos_subnet_list:
+                raise n_exc.Invalid('This VIP is not authorized to use the specified subnet')
+        else:
+            raise n_exc.Invalid('The tenant COS is not configured with a VIP network list')
+
         v = super(LoadBalancerPlugin, self).create_vip(context, vip)
         driver = self._get_driver_for_pool(context, v['pool_id'])
         driver.create_vip(context, v)
