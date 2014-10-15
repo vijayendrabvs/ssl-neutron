@@ -1,0 +1,252 @@
+Neutron Entities
+================
+
+The following new neutron entities are introduced as part of LBaaS SSL features.
+	•	SSL certificates
+	•	SSL cert chains (intermediate SSL certificates)
+	•	SSL cert keys
+	•	Associations between a VIP (Virtual IP), certificate, cert chain, and cert key.
+	
+	
+SSL CLI
+========
+
+The following CLIs have been introduced in order to facilitate the CRUD operations for each of the above entities:
+
+	•	SSL Certificates
+	------------------
+    lb-sslcert-create
+    lb-sslcert-list
+    lb-sslcert-show
+    lb-sslcert-delete
+
+	•	SSL Cert Chains
+  ------------------
+    lb-sslcertchain-create
+    lb-sslcertchain-list
+    lb-sslcertchain-show
+    lb-sslcertchain-delete
+
+	•	 SSL Cert Keys 
+	------------------
+    lb-sslcertkey-create
+    lb-sslcertkey-list
+    lb-sslcertkey-show
+    lb-sslcertkey-delete
+    
+	•	Associations between a VIP (Virtual IP), Certificate, Cert Chain, and Cert Key.
+	----------------------------------------------------------------------------------
+    lb-vip-sslcert-association-create
+    lb-vip-sslcert-association-delete
+    lb-vip-sslcert-association-list
+    lb-vip-sslcert-association-show
+
+
+
+Example usages of these commands
+=================================
+
+
+Step 1. Create an SSL certificate
+------------------------------------
+
+neutron lb-sslcert-create --name cert1 --passphrase passphrase1  --description ssl-cert-1 --certificate "-----BEGIN CERTIFICATE-----\nMIICxjCCAa6gAwIBAgIECCzfNjANBgkqhkiG9w0BAQsFADAlMQswCQYDVQQGEwJV\nUzEWMBQGA1UEAxMNdGVzdDEubGFiLmRvbTAeFw0xNDA1MDcxOTM0MTRaFw0xNTA1\nMDcxOTM0MTRaMCUxCzAJBgNVBAYTAlVTMRYwFAYDVQQDEw10ZXN0MS5sYWIuZG9t\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7tI4Nsfhp3G+bxgWxIC2\ntScMTFzrcjPszlSGcuJ2Lo9/uzs7biPUg+S6Q+FfhmZeI8ttW5SpOQPJfY+pYQeM\nT/bNkITE92w7tFc0wqckajMWo0c1yrUCIf29AQ++e1WjnXFWKG/tAbPca/qwGD7+\nRHwvs/ng4F7kienx00ohshNwKQhBJqp8X9OE0tqHymF5k2NSrCNETi6oszm2R7fD\nPxda+OOyGG+sMkkiY4Jebckmkwm6nh6YwL+WILcqHLdN/iTs+JDoVF97MGsBzAHo\nE2lYdam4UEFVTrgevZUrPle4wTneDl4l7drfORp/VU1WwB1Gj7nhS4ob9KsnAYP0\niwIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQCqgNHoFumnEXTG+bcHVAlL8Ck5+L5X\n3/cq8uvjUgFYPpM4Z8xwduSLC7hmfTxS/xaEMqnsEHD4Xa7BWO9D4O2dVHtfWYal\nUdNgDxqzZ+Sr1wyeyDBN7uAn7Ttnm2JBIVNB7Oi1dU1UxJCRiPErNUPYfO25rAtO\nL67WO1f4alYQLdhAuXyZI7G5FonN/+1VGDrfNODb7gGZjIeRbjrXiGQ9kwTuXKCp\nRFOHItKIiOgM5Eg4nJgEzt8omYCKK8WPySUF8+OOWcKAQ/4ThKa+uQDHv57n6mLN\nTTzwsQzQ0udx+fbKQdH61ZBDNc8r9ERrzNrdVnBtMXliRvhYUAag9ZIy\n-----END CERTIFICATE-----"
+
+The result will produce a unique UUID for the certificate in case the creation goes through without errors. The UUID can be viewed in the “id” field of the output.
+You can also view the certificate you just created, using its name “cert1”, using the command shown below:
+
+neutron lb-sslcert-show cert1
+
+
+You can view all ssl certificates belonging the invoking tenant using:
+
+neutron lb-sslcert-list
+
+
+Step 2. Create an SSL certificate chain
+----------------------------------------
+
+neutron lb-sslcertchain-create --name certchain1 --cert-chain "-----BEGIN CERTIFICATE-----\nMIICwjCCAaqgAwIBAgIECCziBzANBgkqhkiG9w0BAQsFADAjMQswCQYDVQQGEwJV\nUzEUMBIGA1UEAxMLaW50LmxhYi5kb20wHhcNMTQwNTA3MTk0NjE1WhcNMTUwNTA3\nMTk0NjE1WjAjMQswCQYDVQQGEwJVUzEUMBIGA1UEAxMLaW50LmxhYi5kb20wggEi\nMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCiEkH7LSR1XTYmMMN5cBwz9tAB\n7LEf1xzal4JJkLNnLbDc2sjCNGndj65Z8GaHpHJSI0FDrSv5H9tG2kf7syvai/Do\nCjHI/oGBl/jPcOYrWYuCWuKKKM9BkctOTCxchaLey9Cr7nQRnJqoiI/LdnnWvS1R\nEnXbtLZ2tXSyFOXTnwTrpFGzPg1lVtf/k/ginEcEeRcqt6OlPgfKTiqOp/iqgo8l\nK9t83wFQtqNPQj3huXOIz9DzSbkOZZBtgzCvqSpivL7a1k1dE+YqAS7Rrr5wRYKJ\nerD4U7yEkewjtqwlXNO8M3iYQQgpoDyqqFzjPQbezYF97axHjgnIYDFhRTHHAgMB\nAAEwDQYJKoZIhvcNAQELBQADggEBAB9E2JyIi43oxxDrRI/P+bU0fDeoGP8IB2fz\nE0PWDH8EHSPUxK/1w8K8ymtjVF0dqDGUTYQVi0SUed5Z/c9Z5A+bE8Ipx7G8gIbv\nt82finA87lctQt7RNce1BSmS72QRHeBFNdSrcEM74vm1pBZs+DqMuAbQxfEVuM4o\na2jNHEq5XpivD2EQTrmrMjaZMPpFBwBM6fKx0IgEavLzI60yByO4n0ZrZ291YYBa\nmOeuu296H+CvESQojfvjeq+8qw9aXXZnePW838QN+DD507HWay53WCt1+Tl6pWZU\nwAwTchj1In3Rk3F0Xkw/LlGW1YEWCr3exs5FDy6XSygf6uN85tM=\n-----END CERTIFICATE-----"
+
+You can view all cert chains created and belonging to the invoking tenant, using:
+
+neutron lb-sslcertchain-list
+
+
+You can view an individual cert chain using:
+
+neutron lb-sslcertchain-show <cert_chain_id>
+
+
+Step 3. Create an SSL certificate key
+--------------------------------------
+
+neutron --debug lb-sslcertkey-create --name key1 --key "-----BEGIN PRIVATE KEY-----\nMIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQDu0jg2x+Gncb5v\nGBbEgLa1JwxMXOtyM+zOVIZy4nYuj3+7OztuI9SD5LpD4V+GZl4jy21blKk5A8l9\nj6lhB4xP9s2QhMT3bDu0VzTCpyRqMxajRzXKtQIh/b0BD757VaOdcVYob+0Bs9xr\n+rAYPv5EfC+z+eDgXuSJ6fHTSiGyE3ApCEEmqnxf04TS2ofKYXmTY1KsI0ROLqiz\nObZHt8M/F1r447IYb6wySSJjgl5tySaTCbqeHpjAv5Ygtyoct03+JOz4kOhUX3sw\nawHMAegTaVh1qbhQQVVOuB69lSs+V7jBOd4OXiXt2t85Gn9VTVbAHUaPueFLihv0\nqycBg/SLAgMBAAECggEASnLCD2G0GIy+vscVoeA2FLa9gLietRU2xwNWfk3WZaFa\nQjWuyyDkSNFut2Z0buNOiX4K8zeeoSVrFHdKZ/MAbJUVc+3PsQnOeuOMkPmlwm12\nqyOxwyU2Kv58gu4zhSMnRBdmsmhhy9wT5J1bc9N/VD4aaNKGpasvN0b0mddMNcR7\nUyNKITAQEfft5tQmn6Ui+b6uAys3BJm32MTtSGKOFcXr1HKVuZe6/oLSw8u75vZZ\nbD2SF4UgLpS+2kI0wpr4lC87NSBNuI5ZguOQ/NhENaSKpOLy5tcsHL/fL9N33/VU\nXI08Qceuh9JdGHRzl00tWS+ADem3yUFKseMEiyb8kQKBgQD3qpSIGqMUpY5DZf0o\nJGvZ8bWzyK3rJD+B8ObJmUdbdul0L/S8b3ZUtd4G3nrt+6s7L9UzRwaZ+VAkBMlQ\nAdx2BOTbwZUEi0zP3ns2CZKJWqMmDdrk0RA7z4DRDKsFKgX2cvHR3NDOuan1cFv8\nmqmWjGpLpO8XX8zSI20Zidl/bwKBgQD223JHSc1l2P7cPmaQvuX6RE33FKnGIdSH\n498EEnXWeRx2wbxVd3wnXZIC87FocUllU+4z7ESIXl4Cn9aB2rObqXU0XwNFsE/E\nfbSAsjRpsyBDYQvnJb9cKSGNGYMGlauMmeVljIzPeo06JSaDlZCFTboh0civ+Ggn\n+FD+VA9OpQKBgQDpR5E0SfLGJdLEhTJZN0UnOlbuCt5WmAQBvwmDZo8iBfWLbQhW\n3Z5V2CBT1AdyVhVJYJqu+/2p1n24D5IXfElOGPoATGyypQsq2OKxWX7fRbJay74c\nvRdPXvp07jvAV37aThacmCNONO9zsevTGVMX7RbKPYa/O4tPe/LtlTx6nQKBgQDO\nBr7tAoqbyyyCUs41Vi4I3wMXCTbctxVzSNqzwlh45OG9t9nglvWWwUCAmDTjz1EL\nca4nxbQ5AFGD7TURcZ9fdmHskLPhcNJSUvvYQWL/KNHvikpt45I/b9Chu74gO8BO\ne476XwCSlVzTP3hSb/yLVSDY4waU30TGvzeR3EReRQKBgQDwhHN4kD+vRREMCAVy\nSskYBNhZ2okQJ31atRFzPglA6oEDB3zMsTSEOhlGiJR+XuodNj3ApztYS09dqAL/\nxKyQDyAAjBlesh8HksqAcIcrozII5aDidl4sFhDwj++aEHfNUO5eVLv/DF9WoZXm\nIeDsxKpxxrZlCXBeLEqY5LR78w==\n-----END PRIVATE KEY-----"
+
+You can view an indivicual cert key using:
+
+neutron lb-sslcertkey-show <cert_key_id>
+
+
+Step 4. Associate a VIP (which you will need to create with a neutron lb-vip-create command) with the SSL cert, cert chain and key created above
+-------------------------------------------------------------------------------------------------------------------------------------------------
+
+neutron lb-vip-sslcert-associate --name vipassoc1 --cert-id $certid --vip-id $vipid --cert-chain-id $certchainid --key-id $keyid
+
+
+where $certid, $vipid, $certchainid and $keyid are the values in the “id” fields of the responses in the CLIs used to create them (as described in Steps 1 - 3).
+
+The above operation will also yield an ID for this particular association. The successful return of this command does not guarantee the successful association of these entities on the LB device, since the operation is asynchronous. You will need to wait and confirm that the status of the association is ‘ACTIVE’ vs ‘PENDING_CREATE’ that it is placed in initially. You can verify this using the command:
+
+neutron lb-vip-sslcert-association-show vipassoc1
+or
+neutron lb-vip-sslcert-association-show <association_id>
+
+
+Step 5. Disassociate a VIP from the <cert, certchain, key> tuple
+-----------------------------------------------------------------
+
+neutron lb-vip-sslcert-disassociate <association_id>
+
+This will move the entry initially to ‘PENDING_DELETE’, which you can verify using:
+
+neutron lb-vip-sslcert-association-show <association_id>
+
+However, after the disassociation is complete on the LB device, this entry will be removed from neutron’s database, in which case the lb-vip-sslcert-association-show command will return an error saying that the requested association id was not found.
+
+
+Step 6. Delete a cert
+----------------------
+
+neutron lb-sslcert-delete <cert_id>
+
+This will be disallowed if the cert_id is currently in use in an association with a VIP.
+
+
+Step 7. Delete a cert chain
+----------------------------
+
+neutron lb-sslcertchain-delete <certchain_id>
+
+This will be disallowed if the certchain_id is currently in use in an association with a VIP.
+
+
+Step 8. Delete a cert key
+--------------------------
+
+neutron lb-sslcertkey-delete <key_id>
+
+This will be disallowed if the key_id is currently in use in an association with a VIP.
+
+
+
+
+
+Sample API invocations using curl
+==================================
+
+
+SSL certificates
+-----------------
+
+lb-sslcert-create
+curl -i http://neutron-controller-hostname:9696/v2.0/lb/ssl_certificates.json -X POST -H "X-Auth-Token: b26cf8e12d6c45b9babb8cea07443483" -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: python-neutronclient" -d '{"ssl_certificate": {"certificate": "-----BEGIN CERTIFICATE-----\\nMIICxjCCAa6gAwIBAgIECCzfNjANBgkqhkiG9w0BAQsFADAlMQswCQYDVQQGEwJV\\nUzEWMBQGA1UEAxMNdGVzdDEubGFiLmRvbTAeFw0xNDA1MDcxOTM0MTRaFw0xNTA1\\nMDcxOTM0MTRaMCUxCzAJBgNVBAYTAlVTMRYwFAYDVQQDEw10ZXN0MS5sYWIuZG9t\\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA7tI4Nsfhp3G+bxgWxIC2\\ntScMTFzrcjPszlSGcuJ2Lo9/uzs7biPUg+S6Q+FfhmZeI8ttW5SpOQPJfY+pYQeM\\nT/bNkITE92w7tFc0wqckajMWo0c1yrUCIf29AQ++e1WjnXFWKG/tAbPca/qwGD7+\\nRHwvs/ng4F7kienx00ohshNwKQhBJqp8X9OE0tqHymF5k2NSrCNETi6oszm2R7fD\\nPxda+OOyGG+sMkkiY4Jebckmkwm6nh6YwL+WILcqHLdN/iTs+JDoVF97MGsBzAHo\\nE2lYdam4UEFVTrgevZUrPle4wTneDl4l7drfORp/VU1WwB1Gj7nhS4ob9KsnAYP0\\niwIDAQABMA0GCSqGSIb3DQEBCwUAA4IBAQCqgNHoFumnEXTG+bcHVAlL8Ck5+L5X\\n3/cq8uvjUgFYPpM4Z8xwduSLC7hmfTxS/xaEMqnsEHD4Xa7BWO9D4O2dVHtfWYal\\nUdNgDxqzZ+Sr1wyeyDBN7uAn7Ttnm2JBIVNB7Oi1dU1UxJCRiPErNUPYfO25rAtO\\nL67WO1f4alYQLdhAuXyZI7G5FonN/+1VGDrfNODb7gGZjIeRbjrXiGQ9kwTuXKCp\\nRFOHItKIiOgM5Eg4nJgEzt8omYCKK8WPySUF8+OOWcKAQ/4ThKa+uQDHv57n6mLN\\nTTzwsQzQ0udx+fbKQdH61ZBDNc8r9ERrzNrdVnBtMXliRvhYUAag9ZIy\\n-----END CERTIFICATE-----", "name": "cert1", "passphrase": "\u201cpassphrase1\u201d", "description": "\u201cssl-cert-1\u201d"}}'
+
+lb-sslcert-list
+curl -i http://neutron-controller-hostname:9696/v2.0/lb/ssl_certificates.json -X GET -H "X-Auth-Token: 0b0011c1bcb54ea4917a06806cc24974" -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: python-neutronclient"
+
+lb-sslcert-show
+curl -i http://neutron-controller-hostname:9696/v2.0/lb/ssl_certificates/ea20b47d-cb3f-4b62-a3cb-7b3ed6518b54.json -X GET -H "X-Auth-Token: 6f5e4b20ea5b408781b2a88576feae93" -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: python-neutronclient"
+
+lb-sslcert-delete
+curl -i http://neutron-controller-hostname:9696/v2.0/lb/ssl_certificates/dfdbf6fb-4fdc-4743-9566-75da73207d3b.json -X DELETE -H "X-Auth-Token: 11c2030b51154c72a05f2d6254d83510" -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: python-neutronclient"
+ 
+
+For SSL certificate chain
+----------------------------------
+
+lb-sslcertchain-create
+curl -i http://neutron-controller-hostname:9696/v2.0/lb/ssl_certificate_chains.json -X POST -H "X-Auth-Token: dbd37129cf254188b242f03f929270c8" -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: python-neutronclient" -d '{"ssl_certificate_chain": {"name": "certchain1", "cert_chain": "-----BEGIN CERTIFICATE-----\\nMIICwjCCAaqgAwIBAgIECCziBzANBgkqhkiG9w0BAQsFADAjMQswCQYDVQQGEwJV\\nUzEUMBIGA1UEAxMLaW50LmxhYi5kb20wHhcNMTQwNTA3MTk0NjE1WhcNMTUwNTA3\\nMTk0NjE1WjAjMQswCQYDVQQGEwJVUzEUMBIGA1UEAxMLaW50LmxhYi5kb20wggEi\\nMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQCiEkH7LSR1XTYmMMN5cBwz9tAB\\n7LEf1xzal4JJkLNnLbDc2sjCNGndj65Z8GaHpHJSI0FDrSv5H9tG2kf7syvai/Do\\nCjHI/oGBl/jPcOYrWYuCWuKKKM9BkctOTCxchaLey9Cr7nQRnJqoiI/LdnnWvS1R\\nEnXbtLZ2tXSyFOXTnwTrpFGzPg1lVtf/k/ginEcEeRcqt6OlPgfKTiqOp/iqgo8l\\nK9t83wFQtqNPQj3huXOIz9DzSbkOZZBtgzCvqSpivL7a1k1dE+YqAS7Rrr5wRYKJ\\nerD4U7yEkewjtqwlXNO8M3iYQQgpoDyqqFzjPQbezYF97axHjgnIYDFhRTHHAgMB\\nAAEwDQYJKoZIhvcNAQELBQADggEBAB9E2JyIi43oxxDrRI/P+bU0fDeoGP8IB2fz\\nE0PWDH8EHSPUxK/1w8K8ymtjVF0dqDGUTYQVi0SUed5Z/c9Z5A+bE8Ipx7G8gIbv\\nt82finA87lctQt7RNce1BSmS72QRHeBFNdSrcEM74vm1pBZs+DqMuAbQxfEVuM4o\\na2jNHEq5XpivD2EQTrmrMjaZMPpFBwBM6fKx0IgEavLzI60yByO4n0ZrZ291YYBa\\nmOeuu296H+CvESQojfvjeq+8qw9aXXZnePW838QN+DD507HWay53WCt1+Tl6pWZU\\nwAwTchj1In3Rk3F0Xkw/LlGW1YEWCr3exs5FDy6XSygf6uN85tM=\\n-----END CERTIFICATE-----"}}'
+
+lb-sslcertchain-list
+curl -i http://neutron-controller-hostname:9696/v2.0/lb/ssl_certificate_chains.json -X GET -H "X-Auth-Token: 2c71031200c44c89a31d9183e8bf2e49" -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: python-neutronclient"
+
+lb-sslcertchain-show
+curl -i http://neutron-controller-hostname:9696/v2.0/lb/ssl_certificate_chains.json?fields=id&id=37b70010-dd31-4e62-b79b-4e9b3219e590 -X GET -H "X-Auth-Token: 6979882049ee4d48bd35625afabb5406" -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: python-neutronclient"
+
+lb-sslcertchain-delete
+curl -i http://neutron-controller-hostname:9696/v2.0/lb/ssl_certificate_chains/37b70010-dd31-4e62-b79b-4e9b3219e590.json -X DELETE -H "X-Auth-Token: bf01a87434c04ee88fc65580d1505def" -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: python-neutronclient"
+
+
+Certificate keys
+-----------------------
+
+lb-sslcertkey-create
+curl -i http://neutron-controller-hostname:9696/v2.0/lb/ssl_certificate_keys.json -X POST -H "X-Auth-Token: e7af2ba85b0644fcbe8baebbf15ff72c" -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: python-neutronclient" -d '{"ssl_certificate_key": {"name": "key1", "key": "-----BEGIN PRIVATE KEY-----\\nMIIEvwIBADANBgkqhkiG9w0BAQEFAASCBKkwggSlAgEAAoIBAQDu0jg2x+Gncb5v\\nGBbEgLa1JwxMXOtyM+zOVIZy4nYuj3+7OztuI9SD5LpD4V+GZl4jy21blKk5A8l9\\nj6lhB4xP9s2QhMT3bDu0VzTCpyRqMxajRzXKtQIh/b0BD757VaOdcVYob+0Bs9xr\\n+rAYPv5EfC+z+eDgXuSJ6fHTSiGyE3ApCEEmqnxf04TS2ofKYXmTY1KsI0ROLqiz\\nObZHt8M/F1r447IYb6wySSJjgl5tySaTCbqeHpjAv5Ygtyoct03+JOz4kOhUX3sw\\nawHMAegTaVh1qbhQQVVOuB69lSs+V7jBOd4OXiXt2t85Gn9VTVbAHUaPueFLihv0\\nqycBg/SLAgMBAAECggEASnLCD2G0GIy+vscVoeA2FLa9gLietRU2xwNWfk3WZaFa\\nQjWuyyDkSNFut2Z0buNOiX4K8zeeoSVrFHdKZ/MAbJUVc+3PsQnOeuOMkPmlwm12\\nqyOxwyU2Kv58gu4zhSMnRBdmsmhhy9wT5J1bc9N/VD4aaNKGpasvN0b0mddMNcR7\\nUyNKITAQEfft5tQmn6Ui+b6uAys3BJm32MTtSGKOFcXr1HKVuZe6/oLSw8u75vZZ\\nbD2SF4UgLpS+2kI0wpr4lC87NSBNuI5ZguOQ/NhENaSKpOLy5tcsHL/fL9N33/VU\\nXI08Qceuh9JdGHRzl00tWS+ADem3yUFKseMEiyb8kQKBgQD3qpSIGqMUpY5DZf0o\\nJGvZ8bWzyK3rJD+B8ObJmUdbdul0L/S8b3ZUtd4G3nrt+6s7L9UzRwaZ+VAkBMlQ\\nAdx2BOTbwZUEi0zP3ns2CZKJWqMmDdrk0RA7z4DRDKsFKgX2cvHR3NDOuan1cFv8\\nmqmWjGpLpO8XX8zSI20Zidl/bwKBgQD223JHSc1l2P7cPmaQvuX6RE33FKnGIdSH\\n498EEnXWeRx2wbxVd3wnXZIC87FocUllU+4z7ESIXl4Cn9aB2rObqXU0XwNFsE/E\\nfbSAsjRpsyBDYQvnJb9cKSGNGYMGlauMmeVljIzPeo06JSaDlZCFTboh0civ+Ggn\\n+FD+VA9OpQKBgQDpR5E0SfLGJdLEhTJZN0UnOlbuCt5WmAQBvwmDZo8iBfWLbQhW\\n3Z5V2CBT1AdyVhVJYJqu+/2p1n24D5IXfElOGPoATGyypQsq2OKxWX7fRbJay74c\\nvRdPXvp07jvAV37aThacmCNONO9zsevTGVMX7RbKPYa/O4tPe/LtlTx6nQKBgQDO\\nBr7tAoqbyyyCUs41Vi4I3wMXCTbctxVzSNqzwlh45OG9t9nglvWWwUCAmDTjz1EL\\nca4nxbQ5AFGD7TURcZ9fdmHskLPhcNJSUvvYQWL/KNHvikpt45I/b9Chu74gO8BO\\ne476XwCSlVzTP3hSb/yLVSDY4waU30TGvzeR3EReRQKBgQDwhHN4kD+vRREMCAVy\\nSskYBNhZ2okQJ31atRFzPglA6oEDB3zMsTSEOhlGiJR+XuodNj3ApztYS09dqAL/\\nxKyQDyAAjBlesh8HksqAcIcrozII5aDidl4sFhDwj++aEHfNUO5eVLv/DF9WoZXm\\nIeDsxKpxxrZlCXBeLEqY5LR78w==\\n-----END PRIVATE KEY-----"}}
+
+lb-sslcertkey-list
+curl -i http://neutron-controller-hostname:9696/v2.0/lb/ssl_certificate_keys.json -X GET -H "X-Auth-Token: f80dd2bd2b2d4a898b713068c5c4b6e2" -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: python-neutronclient"
+
+lb-sslcertkey-show
+curl -i http://neutron-controller-hostname:9696/v2.0/lb/ssl_certificate_keys/9870e915-bd2d-4ec6-a542-c619f797aba9.json -X GET -H "X-Auth-Token: cfbb199b39a8443185f7f6fc5cbb6ea1" -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: python-neutronclient"
+
+lb-sslcertkey-delete
+curl -i http://neutron-controller-hostname:9696/v2.0/lb/ssl_certificate_keys/9870e915-bd2d-4ec6-a542-c619f797aba9.json -X DELETE -H "X-Auth-Token: b7b0b73b09c64e10b60c31eb32e6f571" -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: python-neutronclient"
+
+
+Associations
+-------------------
+
+lb-vip-sslcert-associate
+curl -i http://neutron-controller-hostname:9696/v2.0/lb/vip_ssl_certificate_associations.json -X POST -H "X-Auth-Token: 9b5d50a44d6e47cd81c7d1e23e5e9817" -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: python-neutronclient" -d '{"vip_ssl_certificate_association": {"cert_id": "42a2be42-6b1f-4a54-a093-a0e997ad064a", "cert_chain_id": "2ce288f7-0a1e-4a34-b636-23a2d20d9cee", "key_id": "c9214fb6-3c15-4735-974a-42f8a2c679cd", "name": "assn6", "vip_id": "a1036810-0da1-4fb0-bc69-2824cb430272"}}'
+
+lb-vip-sslcert-disassociate
+curl -i http://neutron-controller-hostname:9696/v2.0/lb/vip_ssl_certificate_associations/f686711a-9392-4f76-a6ff-1c99668681e8.json -X DELETE -H "X-Auth-Token: c05cb941261a49f3b12bb1e87d4dac36" -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: python-neutronclient"
+
+lb-vip-sslcert-association-list
+curl -i http://neutron-controller-hostname:9696/v2.0/lb/vip_ssl_certificate_associations.json -X GET -H "X-Auth-Token: 4839b203c5894aab96a0a9b26e40f15b" -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: python-neutronclient"
+
+lb-vip-sslcert-association-show
+curl -i http://neutron-controller-hostname:9696/v2.0/lb/vip_ssl_certificate_associations/f686711a-9392-4f76-a6ff-1c99668681e8.json -X GET -H "X-Auth-Token: c0d55fca959f4c2c821aa48f93b18b70" -H "Content-Type: application/json" -H "Accept: application/json" -H "User-Agent: python-neutronclient"
+
+
+
+
+
+
+
+
+
+
+
+
+SSL API signatures
+===================
+
+
+lb-sslcert-create
+------------------
+
+POST /v2.0/lb/ssl_certificates.json
+
+POST body:
+
+{"ssl_certificate": {"certificate": "cert-content", "name": "cert1", "passphrase": "passphrase-value", "description": "ssl-cert-description"}}'
+
+
+lb-sslcert-list
+—————————
+
+GET v2.0/lb/ssl_certificates.json
+
+
+lb-sslcert-show
+——————————
+
+GET /v2.0/lb/ssl_certificates/<ssl_cert_id>
+
+
+<DOCUMENTATION OF THE REST OF THE APIs TO BE UPDATED>
+
+
+
