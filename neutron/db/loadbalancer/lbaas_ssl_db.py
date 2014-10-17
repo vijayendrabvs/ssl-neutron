@@ -251,7 +251,7 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
             elif issubclass(model, SSLCertificate):
                 raise lbaas_ssl.SSLCertificateNotFound(certificate_id=id)
             elif issubclass(model, VipSSLCertificateAssociation):
-                raise lbaas_ssl.VipSSLCertificateAssociationNotFound(vip_id=id)
+                raise lbaas_ssl.VipSSLCertificateAssociationNotFound(assoc_id=id)
             elif issubclass(model, SSLCertificateChain):
                 raise lbaas_ssl.SSLCertificateChainNotFound(ssl_cert_id=id)
             elif issubclass(model, SSLCertificateKey):

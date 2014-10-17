@@ -76,8 +76,7 @@ class SSLCertificateKeyException(Exception):
 
 
 class VipSSLCertificateAssociationNotFound(qexception.NotFound):
-    message = _("Vip %(vip_id)s is not associated "
-                "with SSL Certificate %(certificate_id)s")
+    message = _("VIPSSLCertAssociation id %(assoc_id)s not found")
 
 
 class VipSSLCertificateAssociationExists(qexception.Conflict):
