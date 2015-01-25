@@ -37,6 +37,10 @@ class VipExists(qexception.NeutronException):
     message = _("Another Vip already exists for pool %(pool_id)s")
 
 
+class IpInUseByOtherTenant(qexception.NeutronException):
+    message = _("Another Tenant %(tenant_id)s is using the IP %(ip)s")
+
+
 class PoolNotFound(qexception.NotFound):
     message = _("Pool %(pool_id)s could not be found")
 

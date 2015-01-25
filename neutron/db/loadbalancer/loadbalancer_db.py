@@ -33,7 +33,9 @@ from neutron.openstack.common.db import exception
 from neutron.openstack.common import log as logging
 from neutron.openstack.common import uuidutils
 from neutron.plugins.common import constants
+from neutron.common import constants as neutronconstants
 from neutron.services.loadbalancer import constants as lb_const
+from neutron.db import l3_db
 
 
 LOG = logging.getLogger(__name__)
@@ -173,6 +175,7 @@ class PoolMonitorAssociation(model_base.BASEV2,
 
 
 class LoadBalancerPluginDb(LoadBalancerPluginBase,
+                           l3_db.L3_NAT_db_mixin,
                            base_db.CommonDbMixin):
     """Wraps loadbalancer with SQLAlchemy models.
 
@@ -305,6 +308,15 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
             sess_qry = context.session.query(SessionPersistence)
             sess_qry.filter_by(vip_id=vip_id).delete()
 
+    def _get_ipallocation_by_ip(self, context, ip_address):
+        model = models_v2.IPAllocation
+        query = self._model_query(context, model)
+        try:
+            ipalloc_db = query.filter(model.ip_address == ip_address).one()
+        except exc.NoResultFound:
+            return None
+        return ipalloc_db
+
     def _create_port_for_vip(self, context, vip_db, subnet_id, ip_address):
             # resolve subnet and create port
             subnet = self._core_plugin.get_subnet(context, subnet_id)
@@ -370,14 +382,37 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
             except exception.DBDuplicateEntry:
                 raise loadbalancer.VipExists(pool_id=v['pool_id'])
 
+            # If an incoming address has been provided,
+            # check to see if a port has already been created
+            # for this IP, and belonging to this tenant.
+            # This allows this IP to be reused with multiple
+            # ip:port combinations.
+            create_port = True
+            if v.get('address') is not attributes.ATTR_NOT_SPECIFIED:
+                # Valid IP is present in request
+                ipalloc_db = self._get_ipallocation_by_ip(
+                    context, v.get('address'))
+                if ipalloc_db:
+                    # Get the port id's tenant
+                    port_db = self._get_by_id(context,
+                                              models_v2.Port,
+                                              ipalloc_db['port_id'])
+                    if port_db:
+                        # Get the tenant.
+                        port_tenant_id = port_db['tenant_id']
+                        if port_tenant_id and (port_tenant_id != tenant_id):
+                            raise loadbalancer.IpInUseByOtherTenant(
+                                tenant_id=port_tenant_id,
+                                ip=v.get('address'))
+                    vip_db.port_id = ipalloc_db['port_id']
+                    create_port = False
             # create a port to reserve address for IPAM
-            self._create_port_for_vip(
-                context,
-                vip_db,
-                v['subnet_id'],
-                v.get('address')
-            )
-
+            if create_port:
+                self._create_port_for_vip(
+                    context,
+                    vip_db,
+                    v['subnet_id'],
+                    v.get('address'))
             if pool:
                 pool['vip_id'] = vip_db['id']
 
@@ -433,16 +468,60 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
 
         return self._make_vip_dict(vip_db)
 
+    def _get_fip_by_port_id(self, context, port_id):
+        model = l3_db.FloatingIP
+        query = self._model_query(context, model)
+        try:
+            fip_db = query.filter(model.floating_port_id == port_id).one()
+        except exc.NoResultFound:
+            LOG.info(_("No Floating IP found to be associated "
+                       "with port %s"), port_id)
+            return None
+        except exc.MultipleResultsFound:
+            LOG.info(_("Multiple Floating IPs found to be "
+                       "associated with port %s"), port_id)
+            return None
+        return fip_db
+
+    def _get_vip_list_by_port_id(self, context, port_id):
+        model = Vip
+        query = self._model_query(context, model)
+        try:
+            vips = query.filter(model.port_id == port_id).all()
+        except exc.NoResultFound:
+            LOG.info(_("No VIP found to be associated with port %s"), port_id)
+            return None
+        return vips
+
     def delete_vip(self, context, id):
+        delete_port = True
         with context.session.begin(subtransactions=True):
             vip = self._get_resource(context, Vip, id)
+            port_id = vip.port.id
+            vip_list_by_port = self._get_vip_list_by_port_id(context, port_id)
+            # There can be multiple IP:port combinations, so check whether
+            # they exist, and if they do, do not delete the port.
+            if len(vip_list_by_port) > 1:
+                delete_port = False
             qry = context.session.query(Pool)
             for pool in qry.filter_by(vip_id=id):
                 pool.update({"vip_id": None})
 
             context.session.delete(vip)
-            if vip.port:  # this is a Neutron port
-                self._core_plugin.delete_port(context, vip.port.id)
+            if vip.port and delete_port:  # this is a Neutron port
+                # Check if port is floating port or normal port.
+                port_db = self._get_by_id(context, models_v2.Port, port_id)
+                if port_db['device_owner'] ==\
+                        neutronconstants.DEVICE_OWNER_FLOATINGIP:
+                    # Find the fip id and delete the entire floating ip
+                    # instead of deleting the Floating IP port alone.
+                    fip_db = self._get_fip_by_port_id(context, port_id)
+                    if fip_db:
+                        fip_id = fip_db['id']
+                        super(LoadBalancerPluginDb, self).\
+                            delete_floatingip(context, fip_id)
+                else:
+                    self._core_plugin.delete_port(context, port_id)
 
     def get_vip(self, context, id, fields=None):
         vip = self._get_resource(context, Vip, id)
