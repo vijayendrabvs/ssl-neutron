@@ -293,7 +293,7 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
         # Else go ahead and create it.
         # At this stage, assoc will not have device_ip to begin with. So set it
         # to none explicitly.
-        assoc['device_ip'] = ''
+        assoc['device_ip'] = None
         assoc_db = super(
             LoadBalancerPlugin,
             self).create_vip_ssl_certificate_association(

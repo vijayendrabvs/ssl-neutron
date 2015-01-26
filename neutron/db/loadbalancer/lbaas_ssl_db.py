@@ -409,6 +409,10 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
 
     def create_ssl_certificate_chain(self, context, cert_chain):
         tenant_id = self._get_tenant_id_for_create(context, cert_chain)
+        if cert_chain['name'] == '':
+            cert_chain['name'] = None
+        if cert_chain['cert_chain'] == '':
+            cert_chain['cert_chain'] = None
         with context.session.begin(subtransactions=True):
             certificate_chain_db = SSLCertificateChain(
                 id=uuidutils.generate_uuid(),
@@ -488,8 +492,16 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
     def create_vip_ssl_certificate_association(self, context,
                                                vip_ssl_certificate_association):
         # ssl_association_dict will contain the cert_id, vip_id, key, tenant_id.
-        #tenant_id = self._get_tenant_id_for_create(context, assoc)
         tenant_id = vip_ssl_certificate_association['tenant_id']
+        # Sanitize all inputs that can be null. Having an empty string
+        # '' instead of Null can cause issues with different engines/different
+        # versions of the same engine in mysql.
+        if vip_ssl_certificate_association['name'] == '':
+            vip_ssl_certificate_association['name'] = None
+        if vip_ssl_certificate_association['cert_chain_id'] == '':
+            vip_ssl_certificate_association['cert_chain_id'] = None
+        if vip_ssl_certificate_association['device_ip'] == '':
+            vip_ssl_certificate_association['device_ip'] = None
         with context.session.begin(subtransactions=True):
             assoc_db = VipSSLCertificateAssociation(
                 id=uuidutils.generate_uuid(),
@@ -501,7 +513,7 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
                 key_id=vip_ssl_certificate_association['key_id'],
                 device_ip=vip_ssl_certificate_association['device_ip'],
                 status='PENDING_CREATE',
-                status_description=''
+                status_description=None
             )
             context.session.add(assoc_db)
         return self._make_vip_ssl_assoc_dict(assoc_db)
