@@ -37,8 +37,25 @@ class VipExists(qexception.NeutronException):
     message = _("Another Vip already exists for pool %(pool_id)s")
 
 
+class LBNameEmpty(qexception.NeutronException):
+    message = _("%(entity)s name cannot be empty")
+
+
+class LBNameNotUnique(qexception.NeutronException):
+    message = _("%(entity)s name provided is not unique (names are case insensitive)")
+
+
 class IpInUseByOtherTenant(qexception.NeutronException):
     message = _("Another Tenant %(tenant_id)s is using the IP %(ip)s")
+
+class IAFTokenError(qexception.NeutronException):
+    message = _("IAF Token Generation Failed.")
+
+class VIPAlreadyExistsInDNSException(qexception.NeutronException):
+    message = _("VIP %(vip_name)s already exists in DNS")
+
+class NoIPFoundOnPortException(qexception.NeutronException):
+    message = _("No Ip address found on port object. DNS record creation failed.")
 
 
 class PoolNotFound(qexception.NotFound):
@@ -79,6 +96,12 @@ class ProtocolMismatch(qexception.BadRequest):
     message = _("Protocol %(vip_proto)s does not match "
                 "pool protocol %(pool_proto)s")
 
+class CouldNotPickSubnetForVip(qexception.NotFound):
+    message = _("Couldn't pick a subnet for the VIP")
+
+class LBaaSinReadOnlyMode(qexception.NeutronException):
+    message = _("LBaaS is set to Read-Only and cannot accept CUD operations")
+
 VIPS = 'vips'
 POOLS = 'pools'
 MEMBERS = 'members'
@@ -103,7 +126,8 @@ RESOURCE_ATTRIBUTE_MAP = {
                         'validate': {'type:string': None},
                         'is_visible': True, 'default': ''},
         'subnet_id': {'allow_post': True, 'allow_put': False,
-                      'validate': {'type:uuid': None},
+                      'validate': {'type:uuid_or_none': None},
+                      'default': None,
                       'is_visible': True},
         'address': {'allow_post': True, 'allow_put': False,
                     'default': attr.ATTR_NOT_SPECIFIED,
@@ -166,7 +190,8 @@ RESOURCE_ATTRIBUTE_MAP = {
                         'validate': {'type:string': None},
                         'is_visible': True, 'default': ''},
         'subnet_id': {'allow_post': True, 'allow_put': False,
-                      'validate': {'type:uuid': None},
+                      'validate': {'type:uuid_or_none': None},
+                      'default': None,
                       'is_visible': True},
         'protocol': {'allow_post': True, 'allow_put': False,
                      'validate': {'type:values': ['TCP', 'HTTP', 'HTTPS']},
@@ -237,6 +262,18 @@ RESOURCE_ATTRIBUTE_MAP = {
                       'validate': {'type:string': None},
                       'required_by_policy': True,
                       'is_visible': True},
+        'name': {'allow_post': True, 'allow_put': True,
+                 'validate': {'type:string': None},
+                 'default': '',
+                 'is_visible': True},
+        'response_string': {'allow_post': True, 'allow_put': True,
+                            'validate': {'type:string': None},
+                            'default': '',
+                            'is_visible': True},
+        'shared': {'allow_post': True, 'allow_put': True,
+                   'default': False, 'convert_to': attr.convert_to_boolean,
+                   'is_visible': True, 'required_by_policy': True,
+                   'enforce_policy': True},
         'type': {'allow_post': True, 'allow_put': False,
                  'validate': {'type:values': ['PING', 'TCP', 'HTTP', 'HTTPS']},
                  'is_visible': True},

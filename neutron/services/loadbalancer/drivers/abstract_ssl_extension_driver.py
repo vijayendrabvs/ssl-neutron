@@ -35,8 +35,9 @@ class LBaaSAbstractSSLDriver(object):
         pass
 
     @abc.abstractmethod
-    def create_vip_ssl_certificate_association(self, context, assoc_db_record, cert_db_record,
-                                               key_db_record, vip_db_record, cert_chain_db_record=None):
+    def create_vip_ssl_certificate_association(self, context, assoc_db_record, ssl_profile_db_record,
+                                               cert_db_record, key_db_record, vip_db_record,
+                                               cert_chain_db_record=None):
         pass
 
     @abc.abstractmethod

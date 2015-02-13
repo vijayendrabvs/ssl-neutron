@@ -130,5 +130,10 @@
     "delete_metering_label_rule": "rule:admin_only",
     "get_metering_label_rule": "rule:admin_only",
 
-    "get_service_provider": "rule:regular_user"
+    "get_service_provider": "rule:regular_user",
+
+    "get_health_monitor": "rule:admin_or_owner or rule:shared",
+    "delete_pool_health_monitor": "rule:admin_or_owner or rule:shared or rule:context_is_admin or tenant_id:%(tenant_id)s",
+
+    "get_ssl_profile": "rule:admin_or_owner or rule:shared"
 }

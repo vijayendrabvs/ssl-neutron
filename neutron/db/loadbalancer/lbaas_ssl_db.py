@@ -33,7 +33,6 @@ from neutron.plugins.common import constants
 
 
 class SSLCertificate(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
-
     """Represents a v2 neutron SSL Certificate.
 
     SSL Certificate may be associated to 0..N vips
@@ -48,7 +47,6 @@ class SSLCertificate(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
 
 class SSLCertificateKey(
         model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
-
     """Represents a v2 neutron SSL certificate Key.
 
     The key is associated with a vip along with a cert and/or cert chain.
@@ -62,7 +60,6 @@ class SSLCertificateKey(
 
 class SSLCertificateChain(
         model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
-
     """ Represents an SSL cert chain.
     """
     __tablename__ = 'ssl_cert_chains'
@@ -70,15 +67,13 @@ class SSLCertificateChain(
     cert_chain = sa.Column(sa.String(20480))
 
 
-class VipSSLCertificateAssociation(model_base.BASEV2, models_v2.HasId,
-                                   models_v2.HasStatusDescription,
-                                   models_v2.HasTenant):
-
-    __tablename__ = 'vip_ssl_cert_associations'
+class SSLProfile(
+        model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
+    """ Represents an SSL profile.
+    """
+    __tablename__ = 'ssl_profiles'
     name = sa.Column(sa.String(255))
-    vip_id = sa.Column(sa.String(36),
-                       sa.ForeignKey('vips.id'),
-                       nullable=False)
+    description = sa.Column(sa.String(255))
     cert_id = sa.Column(sa.String(36),
                         sa.ForeignKey('ssl_certificates.id'),
                         nullable=False)
@@ -88,6 +83,20 @@ class VipSSLCertificateAssociation(model_base.BASEV2, models_v2.HasId,
     key_id = sa.Column(sa.String(36),
                        sa.ForeignKey('ssl_cert_keys.id'),
                        nullable=False)
+    shared = sa.Column(sa.Boolean)
+
+
+class VipSSLCertificateAssociation(
+        model_base.BASEV2, models_v2.HasId, models_v2.HasTenant,
+        models_v2.HasStatusDescription):
+    __tablename__ = 'vip_ssl_cert_associations'
+    name = sa.Column(sa.String(255))
+    vip_id = sa.Column(sa.String(36),
+                       sa.ForeignKey('vips.id'),
+                       nullable=False)
+    ssl_profile_id = sa.Column(sa.String(36),
+                        sa.ForeignKey('ssl_profiles.id'),
+                        nullable=False)
     device_ip = sa.Column(sa.String(255))
 
 
@@ -114,18 +123,6 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
         except exc.NoResultFound:
             return None
 
-    def _get_vip_ssl_cert_assocs_by_cert_id(self, context, cert_id, status_set=None):
-        model = VipSSLCertificateAssociation
-        query = self._model_query(context, model)
-        try:
-            if status_set:
-                assocs = query.filter(model.cert_id == cert_id, model.status.in_(status_set)).all()
-            else:
-                assocs = query.filter(model.cert_id == cert_id).all()
-            return assocs
-        except exc.NoResultFound:
-            return None
-
     def find_model_record_with_generic_filters(self, context, **kwargs):
         model = VipSSLCertificateAssociation
         cond = []
@@ -139,33 +136,80 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
         except exc.NoResultFound:
             return None
 
-    def find_vip_ssl_cert_assoc(self, context, cert_id, vip_id, key_id,
-                                cert_chain_id):
+    def find_vip_ssl_cert_assocs_by_vip_id(self, context, vip_id):
         model = VipSSLCertificateAssociation
         query = self._model_query(context, model)
         try:
-            assoc = query.filter(model.cert_id == cert_id, model.vip_id == vip_id,
-                                 model.key_id == key_id, model.cert_chain_id == cert_chain_id)
+            assocs = query.filter(model.vip_id == vip_id)
+            return assocs.all()
+        except exc.NoResultFound:
+            return None
+
+    def find_vip_ssl_cert_assocs_by_ssl_profile_id(self, context, ssl_profile_id):
+        model = VipSSLCertificateAssociation
+        query = self._model_query(context, model)
+        try:
+            assocs = query.filter(model.ssl_profile_id == ssl_profile_id)
+            return assocs.all()
+        except exc.NoResultFound:
+            return None
+
+    def is_ssl_profile_in_use(self, context, ssl_profile_id):
+        assocs = self.find_vip_ssl_cert_assocs_by_ssl_profile_id(context, ssl_profile_id)
+        if len(assocs) > 0:
+            return True
+        else:
+            return False
+
+    def find_vip_ssl_cert_assoc(self, context, vip_id, ssl_profile_id):
+        model = VipSSLCertificateAssociation
+        query = self._model_query(context, model)
+        try:
+            assoc = query.filter(model.vip_id == vip_id, model.ssl_profile_id == ssl_profile_id)
             return assoc.one()
+        except exc.NoResultFound:
+            return None
+
+    def find_ssl_profile_by_key_id(self, context, key_id):
+        model = SSLProfile
+        query = self._model_query(context, model)
+        try:
+            profile = query.filter(model.cert_id == key_id)
+            return profile.one()
+        except exc.NoResultFound:
+            return None
+
+    def find_ssl_profile_by_cert_chain_id(self, context, cert_chain_id):
+        model = SSLProfile
+        query = self._model_query(context, model)
+        try:
+            profile = query.filter(model.cert_id == cert_chain_id)
+            return profile.one()
+        except exc.NoResultFound:
+            return None
+
+    def find_ssl_profile_by_cert_id(self, context, cert_id):
+        model = SSLProfile
+        query = self._model_query(context, model)
+        try:
+            profile = query.filter(model.cert_id == cert_id)
+            return profile.one()
+        except exc.NoResultFound:
+            return None
+
+    def find_ssl_profile_combination(self, context, cert_id, key_id, cert_chain_id):
+        model = SSLProfile
+        query = self._model_query(context, model)
+        try:
+            profile = query.filter(model.cert_id == cert_id, model.key_id == key_id,
+                                   model.cert_chain_id == cert_chain_id)
+            return profile.one()
         except exc.NoResultFound:
             return None
 
     def _get_pool_id_by_vip_id(self, context, vip_id):
         vip_db_record = self._get_ssl_resource(context, lbaas_db.Vip, vip_id)
         return vip_db_record['pool_id']
-
-    def _get_vip_ssl_cert_assocs_by_cert_chain_id(
-            self, context, cert_chain_id, status_set=None):
-        model = VipSSLCertificateAssociation
-        query = self._model_query(context, model)
-        try:
-            if status_set:
-                assocs = query.filter(model.cert_chain_id == cert_chain_id, model.status.in_(status_set)).all()
-            else:
-                assocs = query.filter(model.cert_chain_id == cert_chain_id).all()
-            return assocs
-        except exc.NoResultFound:
-            return None
 
     def _get_vip_ssl_cert_assoc_by_cert_chain_id(
             self, context, cert_chain_id, status=None):
@@ -180,17 +224,58 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
         except exc.NoResultFound:
             return None
 
-    def _get_vip_ssl_cert_assocs_by_key_id(self, context, key_id, status_set=None):
+    def _get_vip_ssl_cert_assocs_by_cert_chain_id(
+            self, context, cert_chain_id, status_set=None):
+        model = SSLProfile
+        query = self._model_query(context, model)
+        try:
+            profiles = query.filter(model.cert_chain_id == cert_chain_id).all()
+        except exc.NoResultFound:
+            return None
+        return self._get_vip_ssl_cert_assocs_of_profiles(context, profiles, status_set)
+
+    def _get_vip_ssl_cert_assocs_of_profiles(self, context, profiles, status_set=None):
+        profile_id_list = []
+        for profile in profiles:
+            profile_id_list.append(profile['id'])
         model = VipSSLCertificateAssociation
         query = self._model_query(context, model)
         try:
             if status_set:
-                assocs = query.filter(model.key_id == key_id, model.status.in_(status_set)).all()
+                assocs = query.filter(model.ssl_profile_id.in_(profile_id_list), model.status.in_(status_set)).all()
             else:
-                assocs = query.filter(model.key_id == key_id).all()
-            return assocs
+                assocs = query.filter(model.ssl_profile_id.in_(profile_id_list)).all()
         except exc.NoResultFound:
             return None
+        return assocs
+
+    def _get_vip_ssl_cert_assocs_by_cert_id(self, context, cert_id, status_set=None):
+        model = SSLProfile
+        query = self._model_query(context, model)
+        try:
+            profiles = query.filter(model.cert_id == cert_id).all()
+        except exc.NoResultFound:
+            return None
+        return self._get_vip_ssl_cert_assocs_of_profiles(context, profiles, status_set)
+
+
+    def _get_vip_ssl_cert_assocs_by_key_id(self, context, key_id, status_set=None):
+        # The effective query we want to execute here is:
+        # select * from vip_sslcert_associations where ssl_profile_id in (select id from ssl_profiles where ssl_profiles.key_id=key_id);
+        # First, get all assocs using this key.
+        # First, get a list of all SSL profiles that use this key id.
+        model = SSLProfile
+        query = self._model_query(context, model)
+        try:
+            profiles = query.filter(model.key_id == key_id).all()
+        except exc.NoResultFound:
+            return None
+
+        # So now we have the list of all ssl profiles that use this key id.
+        # Now let's check how many VIPs are associated with each of these
+        # profile IDs, with the asked for statuses.
+        # First, get a list of all assocs that use this key id.
+        return self._get_vip_ssl_cert_assocs_of_profiles(context, profiles, status_set)
 
     def _get_vip_ssl_cert_assoc_by_key_id(self, context, key_id, status=None):
         model = VipSSLCertificateAssociation
@@ -291,12 +376,22 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
                'name': vip_ssl_association['name'],
                'tenant_id': vip_ssl_association['tenant_id'],
                'vip_id': vip_ssl_association['vip_id'],
-               'cert_id': vip_ssl_association['cert_id'],
-               'cert_chain_id': vip_ssl_association['cert_chain_id'],
-               'key_id': vip_ssl_association['key_id'],
+               'ssl_profile_id': vip_ssl_association['ssl_profile_id'],
                'device_ip': vip_ssl_association['device_ip'],
                'status': vip_ssl_association['status'],
                'status_description': vip_ssl_association['status_description']
+               }
+        return self._fields(res, fields)
+
+    def _make_ssl_profile_dict(self, ssl_profile_db, fields=None):
+        res = {'id': ssl_profile_db['id'],
+               'name': ssl_profile_db['name'],
+               'tenant_id': ssl_profile_db['tenant_id'],
+               'description': ssl_profile_db['description'],
+               'cert_id': ssl_profile_db['cert_id'],
+               'cert_chain_id': ssl_profile_db['cert_chain_id'],
+               'key_id': ssl_profile_db['key_id'],
+               'shared': ssl_profile_db['shared']
                }
         return self._fields(res, fields)
 
@@ -337,6 +432,11 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
             vip_ssl_assocs = self._get_vip_ssl_cert_assocs_by_cert_id(
                 context, id, status_set)
             if vip_ssl_assocs:
+                raise lbaas_ssl.SSLCertificateInUse(certificate_id=id)
+            # Also, if an SSL profile is configured with this cert,
+            # raise an exception.
+            ssl_profiles = self.find_ssl_profile_by_cert_id(context, id)
+            if ssl_profiles:
                 raise lbaas_ssl.SSLCertificateInUse(certificate_id=id)
             try:
                 context.session.delete(certificate)
@@ -392,6 +492,11 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
                 context, id, status_set)
             if vip_ssl_assocs:
                 raise lbaas_ssl.SSLCertificateKeyInUse(cert_key_id=id)
+            # Also, if an SSL profile is configured with this key,
+            # raise an exception.
+            ssl_profiles = self.find_ssl_profile_by_key_id(context, id)
+            if ssl_profiles:
+                raise lbaas_ssl.SSLCertificateInUse(certificate_id=id)
             try:
                 context.session.delete(certificate_key)
                 context.session.flush()
@@ -474,6 +579,11 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
                 context, id, status_set)
             if vip_ssl_assocs:
                 raise lbaas_ssl.SSLCertificateChainInUse(cert_chain_id=id)
+            # Also, if an SSL profile is configured with this certchain,
+            # raise an exception.
+            ssl_profiles = self.find_ssl_profile_by_cert_chain_id(context, id)
+            if ssl_profiles:
+                raise lbaas_ssl.SSLCertificateInUse(certificate_id=id)
             try:
                 context.session.delete(certificate_chain)
                 context.session.flush()
@@ -498,8 +608,10 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
         # versions of the same engine in mysql.
         if vip_ssl_certificate_association['name'] == '':
             vip_ssl_certificate_association['name'] = None
-        if vip_ssl_certificate_association['cert_chain_id'] == '':
-            vip_ssl_certificate_association['cert_chain_id'] = None
+        if vip_ssl_certificate_association['ssl_profile_id'] == '':
+            vip_ssl_certificate_association['ssl_profile_id'] = None
+        if vip_ssl_certificate_association['vip_id'] == '':
+            vip_ssl_certificate_association['vip_id'] = None
         if vip_ssl_certificate_association['device_ip'] == '':
             vip_ssl_certificate_association['device_ip'] = None
         with context.session.begin(subtransactions=True):
@@ -508,9 +620,7 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
                 tenant_id=tenant_id,
                 name=vip_ssl_certificate_association['name'],
                 vip_id=vip_ssl_certificate_association['vip_id'],
-                cert_id=vip_ssl_certificate_association['cert_id'],
-                cert_chain_id=vip_ssl_certificate_association['cert_chain_id'],
-                key_id=vip_ssl_certificate_association['key_id'],
+                ssl_profile_id=vip_ssl_certificate_association['ssl_profile_id'],
                 device_ip=vip_ssl_certificate_association['device_ip'],
                 status='PENDING_CREATE',
                 status_description=None
@@ -537,19 +647,13 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
         # once it successfully removes the cert association with the vip on the
         # device.
         vip_ssl_certificate_association['status'] = "PENDING_DELETE"
-        if vip_ssl_certificate_association['cert_chain_id']:
-            cert_chain_id = vip_ssl_certificate_association['cert_chain_id']
-        else:
-            cert_chain_id = None
         try:
             with context.session.begin(subtransactions=True):
                 assoc_db = VipSSLCertificateAssociation(
                     id=vip_ssl_certificate_association['id'],
                     tenant_id=vip_ssl_certificate_association['tenant_id'],
                     vip_id=vip_ssl_certificate_association['vip_id'],
-                    cert_id=vip_ssl_certificate_association['cert_id'],
-                    cert_chain_id=cert_chain_id,
-                    key_id=vip_ssl_certificate_association['key_id'],
+                    ssl_profile_id=vip_ssl_certificate_association['ssl_profile_id'],
                     device_ip=vip_ssl_certificate_association['device_ip'],
                     status=vip_ssl_certificate_association['status'],
                     status_description=''
@@ -580,9 +684,7 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
                     tenant_id=assoc_db['tenant_id'],
                     name=assoc_db['name'],
                     vip_id=assoc_db['vip_id'],
-                    cert_id=assoc_db['cert_id'],
-                    cert_chain_id=assoc_db['cert_chain_id'],
-                    key_id=assoc_db['key_id'],
+                    ssl_profile_id=assoc_db['ssl_profile_id'],
                     device_ip=dev_ip,
                     status=assoc_db['status'],
                     status_description=assoc_db['status_description'])
@@ -619,3 +721,40 @@ class LBaasSSLDbMixin(lbaas_ssl.LbaasSSLPluginBase, base_db.CommonDbMixin):
     #    assoc_qry = context.session.query(assoc_type)
     #    return assoc_qry.filter_by(vip_id=vip_id,
     #                               status=constants.PENDING_DELETE).all()
+
+    def create_ssl_profile(self, context, s_profile):
+        tenant_id = self._get_tenant_id_for_create(context, s_profile)
+        with context.session.begin(subtransactions=True):
+            ssl_profile_db = SSLProfile(
+                id=uuidutils.generate_uuid(),
+                tenant_id=tenant_id,
+                name=s_profile['name'],
+                description=s_profile['description'],
+                cert_id=s_profile['cert_id'],
+                cert_chain_id=s_profile['cert_chain_id'],
+                key_id=s_profile['key_id'],
+                shared=s_profile['shared']
+            )
+            context.session.add(ssl_profile_db)
+        return self._make_ssl_profile_dict(ssl_profile_db)
+
+
+    def get_ssl_profile(self, context, id, fields=None):
+        ssl_profile = self._get_ssl_resource(context, SSLProfile, id)
+        return self._make_ssl_profile_dict(ssl_profile, fields)
+
+
+    def get_ssl_profiles(self, context, filters=None, fields=None):
+        return self._get_collection(context, SSLProfile,
+                                    self._make_ssl_profile_dict,
+                                    filters=filters, fields=fields)
+
+    def delete_ssl_profile(self, context, id):
+        with context.session.begin(subtransactions=True):
+            ssl_profile_db = self._get_ssl_resource(context, SSLProfile, id)
+            try:
+                context.session.delete(ssl_profile_db)
+                context.session.flush()
+            except Exception as e:
+                raise lbaas_ssl.SSLProfileDeleteException(ssl_profile_id=id)
+        pass

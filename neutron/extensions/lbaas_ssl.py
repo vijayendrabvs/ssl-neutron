@@ -47,6 +47,14 @@ class SSLCertificateInUse(qexception.InUse):
                 "with vips")
 
 
+class SSLNameEmpty(qexception.NeutronException):
+    message = _("SSL %(entity)s name not specified")
+
+
+class SSLNameNotUnique(qexception.NeutronException):
+    message = _("SSL %(entity)s name not unique")
+
+
 class SSLCertificateChainNotFound(qexception.NotFound):
     message = _("SSL Certificate chain %(ssl_cert_id)s does not exist")
 
@@ -57,11 +65,6 @@ class SSLCertificateKeyNotFound(qexception.NotFound):
 
 class SSLCertificateKeyInUse(qexception.InUse):
     message = _("SSL Certificate %(cert_key_id)s is still associated "
-                "with vips")
-
-
-class SSLCertificateChainInUse(qexception.InUse):
-    message = _("SSL Certificate %(cert_chain_id)s is still associated "
                 "with vips")
 
 
@@ -82,15 +85,45 @@ class VipSSLCertificateAssociationNotFound(qexception.NotFound):
 class VipSSLCertificateAssociationExists(qexception.Conflict):
     message = _("Association of specified entities already exists")
 
+class VipSSLCertificateAssociationDisallowed(qexception.Conflict):
+    message = _("An SSL association for this VIP already exists")
 
 class VipSSLCertificateException(Exception):
     message = _("An internal error occurred in DDL of "
                 "association %(assoc_id)s")
 
+class VipSSLCertificateAssociationNameEmpty(Exception):
+    message = _("Association name must be provided when "
+                "associating a VIP with an SSL Profile")
+
+class VipSSLCertificateAssociationVipEmpty(Exception):
+    message = _("VIP ID must be provided when "
+                "associating a VIP with an SSL Profile")
+
+class VipSSLCertificateAssociationProfileEmpty(Exception):
+    message = _("SSLprofile ID must be provided when "
+                "associating a VIP with an SSL Profile")
 
 class VipSSLCertificateAssociationDeleteException(Exception):
     message = _("Deletion of vip ssl cert association %(assoc_id)s failed")
 
+class SSLProfileCombinationExists(Exception):
+    message = _("An SSL profile with the specified cert/key/chain combination already exists")
+
+class SSLProfileCertKeyIDEmpty(Exception):
+    message = _("Key ID cannot be empty when creating an SSL profile")
+
+class SSLProfileCertIDEmpty(Exception):
+    message = _("SSL Cert ID cannot be empty when creating an SSL profile")
+
+class SSLProfileNameEmpty(Exception):
+    message = _("Profile Name cannot be empty when creating an SSL profile")
+
+class SSLProfileinUse(qexception.NeutronException):
+    message = _("SSL profile %(ssl_profile_id)s is in use")
+
+class SSLProfileDeleteException(Exception):
+    message = _("Cannot delete SSL profile %(ssl_profile_id)s")
 
 RESOURCE_ATTRIBUTE_MAP = {
     'ssl_certificates': {
@@ -148,18 +181,22 @@ RESOURCE_ATTRIBUTE_MAP = {
                        'validate': {'type:string': None},
                        'is_visible': True, 'default': ''}
     },
-    'vip_ssl_certificate_associations': {
+    'ssl_profiles': {
         'id': {'allow_post': False, 'allow_put': False,
                'validate': {'type:uuid': None},
                'is_visible': True,
                'primary_key': True},
-        'name': {'allow_post': True, 'allow_put': True,
-                 'validate': {'type:string': None},
-                 'is_visible': True},
         'tenant_id': {'allow_post': True, 'allow_put': False,
                       'validate': {'type:string': None},
                       'required_by_policy': True,
                       'is_visible': True},
+        'name': {'allow_post': True, 'allow_put': True,
+                 'validate': {'type:string': None},
+                 'is_visible': True, 'default': ''},
+        'description': {'allow_post': True, 'allow_put': True,
+                        'validate': {'type:string': None},
+                        'default': '',
+                        'is_visible': True},
         'cert_id': {'allow_post': True, 'allow_put': True,
                     'validate': {'type:string': None},
                     'default': '',
@@ -172,6 +209,27 @@ RESOURCE_ATTRIBUTE_MAP = {
                           'validate': {'type:string': None},
                           'default': '',
                           'is_visible': True},
+        'shared': {'allow_post': True, 'allow_put': True,
+                   'default': False, 'convert_to': attr.convert_to_boolean,
+                   'is_visible': True, 'required_by_policy': True,
+                   'enforce_policy': True}
+    },
+    'vip_ssl_certificate_associations': {
+        'id': {'allow_post': False, 'allow_put': False,
+               'validate': {'type:uuid': None},
+               'is_visible': True,
+               'primary_key': True},
+        'name': {'allow_post': True, 'allow_put': True,
+                 'validate': {'type:string': None},
+                 'is_visible': True},
+        'tenant_id': {'allow_post': True, 'allow_put': False,
+                      'validate': {'type:string': None},
+                      'required_by_policy': True,
+                      'is_visible': True},
+        'ssl_profile_id': {'allow_post': True, 'allow_put': True,
+                    'validate': {'type:string': None},
+                    'default': '',
+                    'is_visible': True},
         'vip_id': {'allow_post': True, 'allow_put': True,
                    'validate': {'type:string': None},
                    'default': '',
@@ -216,7 +274,8 @@ class Lbaas_ssl(extensions.ExtensionDescriptor):
             'ssl_certificates': 'ssl_certificate',
             'vip_ssl_certificate_associations': 'vip_ssl_certificate_association',
             'ssl_certificate_keys': 'ssl_certificate_key',
-            'ssl_certificate_chains': 'ssl_certificate_chain'
+            'ssl_certificate_chains': 'ssl_certificate_chain',
+            'ssl_profiles': 'ssl_profile'
         }
         attr.PLURALS.update(ssl_plurals)
         resources = []
@@ -354,4 +413,24 @@ class LbaasSSLPluginBase(ServicePluginBase):
     @abc.abstractmethod
     def get_vip_ssl_certificate_associations(
             self, context, filters=None, fields=None):
+        pass
+
+    @abc.abstractmethod
+    def create_ssl_profile(self, context, ssl_profile):
+        pass
+
+    @abc.abstractmethod
+    def update_ssl_profile(self, context, id, ssl_profile):
+        pass
+
+    @abc.abstractmethod
+    def delete_ssl_profile(self, context, id):
+        pass
+
+    @abc.abstractmethod
+    def get_ssl_profile(self, context, id, fields=None):
+        pass
+
+    @abc.abstractmethod
+    def get_ssl_profiles(self, context, filters=None, fields=None):
         pass

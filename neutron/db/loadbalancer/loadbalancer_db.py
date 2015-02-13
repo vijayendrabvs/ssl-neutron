@@ -36,9 +36,25 @@ from neutron.plugins.common import constants
 from neutron.common import constants as neutronconstants
 from neutron.services.loadbalancer import constants as lb_const
 from neutron.db import l3_db
+import random, string, requests
+from oslo.config import cfg
+from keystoneclient.v2_0.client import Client
+from sqlalchemy import func
 
+CONF = cfg.CONF
 
 LOG = logging.getLogger(__name__)
+
+CONF.register_group(cfg.OptGroup(name='udns', title='UDNS Configuration'))
+
+UDNS_OPTS = [
+    cfg.StrOpt("api_host", default="http://udns-web-1.stratus.phx.qa.ebay.com"),
+    cfg.StrOpt("zone", default="dev:stratus.dev.ebay.com,ext:ebaystratus.com"),
+    cfg.StrOpt("view", default="dev:ebay-cloud,ext:public"),
+    cfg.StrOpt("user", default="_STRATUS_IAAS"),
+    cfg.StrOpt("password", default="xxxx")
+]
+cfg.CONF.register_opts(UDNS_OPTS, group='dns')
 
 
 class SessionPersistence(model_base.BASEV2):
@@ -155,6 +171,9 @@ class HealthMonitor(model_base.BASEV2, models_v2.HasId, models_v2.HasTenant):
     url_path = sa.Column(sa.String(255))
     expected_codes = sa.Column(sa.String(64))
     admin_state_up = sa.Column(sa.Boolean(), nullable=False)
+    name = sa.Column(sa.String(255))
+    shared = sa.Column(sa.Boolean)
+    response_string = sa.Column(sa.String(8192))
 
     pools = orm.relationship(
         "PoolMonitorAssociation", backref="healthmonitor",
@@ -308,15 +327,6 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
             sess_qry = context.session.query(SessionPersistence)
             sess_qry.filter_by(vip_id=vip_id).delete()
 
-    def _get_ipallocation_by_ip(self, context, ip_address):
-        model = models_v2.IPAllocation
-        query = self._model_query(context, model)
-        try:
-            ipalloc_db = query.filter(model.ip_address == ip_address).one()
-        except exc.NoResultFound:
-            return None
-        return ipalloc_db
-
     def _create_port_for_vip(self, context, vip_db, subnet_id, ip_address):
             # resolve subnet and create port
             subnet = self._core_plugin.get_subnet(context, subnet_id)
@@ -387,32 +397,31 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
             # for this IP, and belonging to this tenant.
             # This allows this IP to be reused with multiple
             # ip:port combinations.
-            create_port = True
+            create_new_port = True
             if v.get('address') is not attributes.ATTR_NOT_SPECIFIED:
-                # Valid IP is present in request
-                ipalloc_db = self._get_ipallocation_by_ip(
-                    context, v.get('address'))
-                if ipalloc_db:
-                    # Get the port id's tenant
-                    port_db = self._get_by_id(context,
-                                              models_v2.Port,
-                                              ipalloc_db['port_id'])
-                    if port_db:
-                        # Get the tenant.
-                        port_tenant_id = port_db['tenant_id']
-                        if port_tenant_id and (port_tenant_id != tenant_id):
+                # Valid IP is present in request, check the port owner
+                port_db = self._get_port_db_by_ip(context, v.get('address'))
+                if port_db:
+                    # Get the tenant.
+                    port_tenant_id = port_db['tenant_id']
+                    if not port_tenant_id or (port_tenant_id != tenant_id):
                             raise loadbalancer.IpInUseByOtherTenant(
                                 tenant_id=port_tenant_id,
                                 ip=v.get('address'))
-                    vip_db.port_id = ipalloc_db['port_id']
-                    create_port = False
+                    vip_db.port_id = port_db['id']
+                    create_new_port = False
             # create a port to reserve address for IPAM
-            if create_port:
+            if create_new_port:
                 self._create_port_for_vip(
                     context,
                     vip_db,
                     v['subnet_id'],
                     v.get('address'))
+
+                ## create an APTR record when port is created.
+                cos = v['tenant_cos']
+                address = self._get_ip_by_port(context, vip_db['port_id'])
+                self._create_aptr_record(vip_db.name, address, cos)
             if pool:
                 pool['vip_id'] = vip_db['id']
 
@@ -468,37 +477,14 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
 
         return self._make_vip_dict(vip_db)
 
-    def _get_fip_by_port_id(self, context, port_id):
-        model = l3_db.FloatingIP
-        query = self._model_query(context, model)
-        try:
-            fip_db = query.filter(model.floating_port_id == port_id).one()
-        except exc.NoResultFound:
-            LOG.info(_("No Floating IP found to be associated "
-                       "with port %s"), port_id)
-            return None
-        except exc.MultipleResultsFound:
-            LOG.info(_("Multiple Floating IPs found to be "
-                       "associated with port %s"), port_id)
-            return None
-        return fip_db
-
-    def _get_vip_list_by_port_id(self, context, port_id):
-        model = Vip
-        query = self._model_query(context, model)
-        try:
-            vips = query.filter(model.port_id == port_id).all()
-        except exc.NoResultFound:
-            LOG.info(_("No VIP found to be associated with port %s"), port_id)
-            return None
-        return vips
-
     def delete_vip(self, context, id):
-        delete_port = True
         with context.session.begin(subtransactions=True):
+            delete_port = True
             vip = self._get_resource(context, Vip, id)
             port_id = vip.port.id
             vip_list_by_port = self._get_vip_list_by_port_id(context, port_id)
+            address = self._get_ip_by_port(context, port_id)
+            cos = self._get_cos_by_tenant_id(vip.tenant_id)
             # There can be multiple IP:port combinations, so check whether
             # they exist, and if they do, do not delete the port.
             if len(vip_list_by_port) > 1:
@@ -522,6 +508,12 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
                             delete_floatingip(context, fip_id)
                 else:
                     self._core_plugin.delete_port(context, port_id)
+                ## delete an APTR record when port is removed
+                fqdn = self._delete_aptr_record(cos, address)
+                if not fqdn:
+                    LOG.info('vip dns record is not deleted successfully from dns.')
+                else:
+                    LOG.info('Vip DNS [%s] delete issued successfully' % fqdn)
 
     def get_vip(self, context, id, fields=None):
         vip = self._get_resource(context, Vip, id)
@@ -707,7 +699,8 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
                'monitor_id': id,
                'status': pool_hm['status'],
                'status_description': pool_hm['status_description'],
-               'tenant_id': hm['tenant_id']}
+               'tenant_id': hm['tenant_id'],
+               'shared': hm['shared']}
         return self._fields(res, fields)
 
     def update_pool_health_monitor(self, context, id, pool_id,
@@ -736,6 +729,21 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
     def create_member(self, context, member):
         v = member['member']
         tenant_id = self._get_tenant_id_for_create(context, v)
+
+        if not context.is_admin:
+            # for non-admin context, make sure member belongs to the tenant
+            address = v['address']
+            port_db = self._get_port_db_by_ip(context, address)
+            if port_db:
+                # Get the tenant.
+                if not port_db['tenant_id'] or \
+                                port_db['tenant_id'] != tenant_id:
+                    raise loadbalancer.IpInUseByOtherTenant(
+                        tenant_id=port_db['tenant_id'],
+                        ip=address)
+            else:
+                # port does not exists. member does not exists
+                raise loadbalancer.MemberNotFound(member_id=address)
 
         with context.session.begin(subtransactions=True):
             # ensuring that pool exists
@@ -782,15 +790,17 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
     def _make_health_monitor_dict(self, health_monitor, fields=None):
         res = {'id': health_monitor['id'],
                'tenant_id': health_monitor['tenant_id'],
+               'name': health_monitor['name'],
                'type': health_monitor['type'],
                'delay': health_monitor['delay'],
                'timeout': health_monitor['timeout'],
                'max_retries': health_monitor['max_retries'],
-               'admin_state_up': health_monitor['admin_state_up']}
+               'admin_state_up': health_monitor['admin_state_up'],
+               'shared': health_monitor['shared']}
         # no point to add the values below to
         # the result if the 'type' is not HTTP/S
         if res['type'] in ['HTTP', 'HTTPS']:
-            for attr in ['url_path', 'http_method', 'expected_codes']:
+            for attr in ['url_path', 'http_method', 'expected_codes', 'response_string']:
                 res[attr] = health_monitor[attr]
         res['pools'] = [{'pool_id': p['pool_id'],
                          'status': p['status'],
@@ -798,13 +808,14 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
                         for p in health_monitor.pools]
         return self._fields(res, fields)
 
-    def create_health_monitor(self, context, health_monitor):
+    def create_health_monitor(self, context, health_monitor, uuid):
         v = health_monitor['health_monitor']
         tenant_id = self._get_tenant_id_for_create(context, v)
         with context.session.begin(subtransactions=True):
             # setting ACTIVE status sinse healthmon is shared DB object
-            monitor_db = HealthMonitor(id=uuidutils.generate_uuid(),
+            monitor_db = HealthMonitor(id=uuid,
                                        tenant_id=tenant_id,
+                                       name=v['name'],
                                        type=v['type'],
                                        delay=v['delay'],
                                        timeout=v['timeout'],
@@ -812,7 +823,9 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
                                        http_method=v['http_method'],
                                        url_path=v['url_path'],
                                        expected_codes=v['expected_codes'],
-                                       admin_state_up=v['admin_state_up'])
+                                       admin_state_up=v['admin_state_up'],
+                                       response_string=v['response_string'],
+                                       shared=v['shared'])
             context.session.add(monitor_db)
         return self._make_health_monitor_dict(monitor_db)
 
@@ -838,3 +851,135 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
         return self._get_collection(context, HealthMonitor,
                                     self._make_health_monitor_dict,
                                     filters=filters, fields=fields)
+
+    def _get_port_db_by_ip(self, context, address):
+        ipalloc_db = self._get_ipallocation_by_ip(context, address)
+        if not ipalloc_db:
+            return None
+
+        # Get the port id's tenant using admin context
+        # use elevated context to get all ports (belonging to any tenant)
+        admin_context = context.elevated()
+        port_db = self._get_by_id(admin_context,
+                                  models_v2.Port,
+                                  ipalloc_db['port_id'])
+        if not port_db:
+            return None
+
+        # Get the tenant.
+        port_tenant_id = port_db['tenant_id']
+        if not port_tenant_id and port_db['device_owner'] \
+                == neutronconstants.DEVICE_OWNER_FLOATINGIP:
+            # FIP does not store tenant information in port_db
+            # find it from fip_db
+            fip_db = self._get_fip_by_port_id(admin_context, port_db['id'])
+            if fip_db:
+                port_tenant_id = fip_db['tenant_id']
+                port_db['tenant_id'] = port_tenant_id
+        return port_db
+
+    def _get_ipallocation_by_ip(self, context, ip_address):
+        model = models_v2.IPAllocation
+        query = self._model_query(context, model)
+        try:
+            ipalloc_db = query.filter(model.ip_address == ip_address).one()
+        except exc.NoResultFound:
+            return None
+        return ipalloc_db
+
+    def _get_ip_by_port(self, context, port_id):
+        model = models_v2.IPAllocation
+        query = self._model_query(context, model)
+        try:
+            ipalloc_db = query.filter(model.port_id == port_id).one()
+            return ipalloc_db['ip_address']
+        except exc.NoResultFound:
+            return None
+
+    def _get_fip_by_port_id(self, context, port_id):
+        model = l3_db.FloatingIP
+        query = self._model_query(context, model)
+        try:
+            fip_db = query.filter(model.floating_port_id == port_id).one()
+        except exc.NoResultFound:
+            LOG.info(_("No Floating IP found to be associated "
+                       "with port %s"), port_id)
+            return None
+        except exc.MultipleResultsFound:
+            LOG.info(_("Multiple Floating IPs found to be "
+                       "associated with port %s"), port_id)
+            return None
+        return fip_db
+
+    def _get_vip_list_by_port_id(self, context, port_id):
+        model = Vip
+        query = self._model_query(context, model)
+        try:
+            vips = query.filter(model.port_id == port_id).all()
+        except exc.NoResultFound:
+            LOG.info(_("No VIP found to be associated with port %s"), port_id)
+            return None
+        return vips
+
+    def _get_cos_by_tenant_id(self, tenant_id):
+        auth_uri = "http://" + cfg.CONF.keystone_authtoken['auth_host'] + ":5000/v2.0"
+        self.keystone_client = Client(username=cfg.CONF.keystone_authtoken['admin_user'],
+                                      password=cfg.CONF.keystone_authtoken['admin_password'],
+                                      tenant_name=cfg.CONF.keystone_authtoken['admin_tenant_name'],
+                                      auth_url=auth_uri)
+        tenant_data_info = self.keystone_client.tenants.get(tenant_id=tenant_id)
+        t_d_info = tenant_data_info.__dict__
+        if 'cos' in t_d_info:
+            return t_d_info['cos']
+        return None
+
+    def _create_aptr_record(self, vip_name, ip_address, cos):
+        """
+        Call the UDNS API to create an APTR record.
+        :param vip_name
+        :param ip_address:
+        :param cos:
+        :return:
+        """
+        try:
+            # todo add hash only if there is a conflict.
+            str_hash = ''.join(random.choice(string.ascii_lowercase + string.digits) for _ in range(5))
+            dns_vip_resource_name = vip_name + '-' + str_hash
+            import udns_dns_driver as udns_driver
+            udns_client = udns_driver.UdnsClient()
+            return udns_client.create_A_PTR_record(ip_address, dns_vip_resource_name, cos)
+        except Exception as ex:
+            LOG.error('an error in creating APTR records for vip [%s]' % vip_name)
+            LOG.exception(ex)
+            return None
+
+    def _delete_aptr_record(self, cos, ip_address):
+        """
+        Delete the APTR record for the ipaddress.
+        :param context:
+        :param ip_address:
+        :return:
+        """
+        try:
+            import udns_dns_driver as udns_driver
+            udns_client = udns_driver.UdnsClient()
+            fully_qualified_name = udns_client.get_PTR_record(cos, ip_address)
+            if fully_qualified_name is not None:
+                return udns_client.delete_A_PTR_record(ip_address, fully_qualified_name, cos)
+            else:
+                LOG.error('DNS record deletion failed. There is no PTR record for address [%s]' % ip_address)
+                return None
+        except Exception as ex:
+            LOG.error('Error removing DNS record for ip %s' % ip_address)
+            LOG.exception(ex)
+            return None
+
+    def is_name_present(self, context, name, model):
+        query = self._model_query(context.elevated(), model)
+        try:
+            assoc = query.filter(func.lower(model.name) == func.lower(name)).all()
+            if len(assoc) > 0:
+                return True
+        except exc.NoResultFound:
+            return False
+        return False
