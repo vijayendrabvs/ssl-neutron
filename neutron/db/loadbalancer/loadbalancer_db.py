@@ -351,7 +351,6 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
     def create_vip(self, context, vip):
         v = vip['vip']
         tenant_id = self._get_tenant_id_for_create(context, v)
-
         with context.session.begin(subtransactions=True):
             if v['pool_id']:
                 pool = self._get_resource(context, Pool, v['pool_id'])

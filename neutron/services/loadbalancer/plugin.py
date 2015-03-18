@@ -58,6 +58,7 @@ cfg.CONF.register_opts(lbaas_opts)
 
 LOG = logging.getLogger(__name__)
 
+STANDARD_MONITOR_LIST = ['http', 'https', 'tcp', 'ping']
 
 class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
                          agent_scheduler.LbaasAgentSchedulerDbMixin,
@@ -177,15 +178,21 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
             raise n_exc.Invalid('Tenant not configured with a COS value!')
         return tenant_cos
 
-    def pick_subnet_id(self, entity, tenant_cos):
+    def pick_subnet_id(self, entitybase, tenant_cos):
+        if 'pool' in entitybase:
+            entityType = "pool"
+            entity = entitybase['pool']
+        else:
+            entityType = "VIP"
+            entity = entitybase['vip']
         requested_subnet = entity['subnet_id']
         all_cos_subnets_dict = json.loads(cfg.CONF.lbaas_vpc_vip_subnets)
         if tenant_cos in all_cos_subnets_dict:
             cos_subnet_list = all_cos_subnets_dict[tenant_cos]
             if requested_subnet and requested_subnet not in cos_subnet_list:
-                raise n_exc.Invalid('This VIP is not authorized to use the specified subnet')
+                raise lbaas.NotAuthorizedToUseSubnet(entity=entityType)
         else:
-            raise n_exc.Invalid('The tenant COS is not configured with a VIP network list')
+            raise lbaas.COSSubnetsNotConfigured()
 
         if not requested_subnet:
             random_index = randint(0,len(all_cos_subnets_dict[tenant_cos])-1)
@@ -204,7 +211,7 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
         self.check_lbaas_read_only()
         tenant_id = vip['vip']['tenant_id']
         tenant_cos = self.get_tenant_cos(tenant_id)
-        subnet_id = self.pick_subnet_id(vip['vip'], tenant_cos)
+        subnet_id = self.pick_subnet_id(vip, tenant_cos)
         vip['vip']['subnet_id'] = subnet_id
         vip['vip']['tenant_cos'] = tenant_cos
         vip_name = vip['vip']['name']
@@ -533,7 +540,7 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
             raise lbaas.LBNameEmpty(entity='Pool')
         tenant_id = p['tenant_id']
         tenant_cos = self.get_tenant_cos(tenant_id)
-        subnet_id = self.pick_subnet_id(p, tenant_cos)
+        subnet_id = self.pick_subnet_id(pool, tenant_cos)
         p['subnet_id'] = subnet_id
 
         db_worker = super(LoadBalancerPlugin, self)
@@ -658,6 +665,10 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
     def delete_health_monitor(self, context, id):
         with context.session.begin(subtransactions=True):
             hm = self.get_health_monitor(context, id)
+            # If the name of the supplied health monitor is a standard name,
+            # don't delete it.
+            if hm['name'].lower() in STANDARD_MONITOR_LIST:
+                raise lbaas.CannotDeleteStandardHealthMonitor(hm_name=hm['name'])
             qry = context.session.query(
                 ldb.PoolMonitorAssociation
             ).filter_by(monitor_id=id).join(ldb.Pool)
@@ -770,6 +781,19 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
             raise lbaas_ssl.SSLNameEmpty(entity='Profile')
 
         db_worker = super(LoadBalancerPlugin, self)
+
+        # Check if any of the supplied IDs are not valid ones.
+        cert_exists = db_worker.get_ssl_certificate(context, cert_id)
+        if not cert_exists:
+            raise lbaas_ssl.SSLCertificateNotFound(certificate_id=cert_id)
+        if cert_chain_id:
+            cert_chain_exists = db_worker.get_ssl_certificate_chain(context, cert_chain_id)
+            if not cert_chain_exists:
+                raise lbaas_ssl.SSLCertificateChainNotFound(ssl_cert_id=cert_chain_id)
+        cert_key_exists = db_worker.get_ssl_certificate_key(context, key_id)
+        if not cert_key_exists:
+            raise lbaas_ssl.SSLCertificateKeyNotFound(ssl_key_id=key_id)
+
         name_present = db_worker.is_name_present(context, ssl_profile_name,
                                                  ssldb.SSLProfile)
         if name_present:

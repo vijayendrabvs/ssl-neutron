@@ -45,14 +45,25 @@ class LBNameNotUnique(qexception.NeutronException):
     message = _("%(entity)s name provided is not unique (names are case insensitive)")
 
 
+class NotAuthorizedToUseSubnet(qexception.NeutronException):
+    message = _("This %(entity)s is not authorized to use the specified subnet")
+
+
+class COSSubnetsNotConfigured(qexception.NeutronException):
+    message = _("The tenant COS has not been configured with authorized subnets")
+
+
 class IpInUseByOtherTenant(qexception.NeutronException):
     message = _("Another Tenant %(tenant_id)s is using the IP %(ip)s")
+
 
 class IAFTokenError(qexception.NeutronException):
     message = _("IAF Token Generation Failed.")
 
+
 class VIPAlreadyExistsInDNSException(qexception.NeutronException):
     message = _("VIP %(vip_name)s already exists in DNS")
+
 
 class NoIPFoundOnPortException(qexception.NeutronException):
     message = _("No Ip address found on port object. DNS record creation failed.")
@@ -96,11 +107,18 @@ class ProtocolMismatch(qexception.BadRequest):
     message = _("Protocol %(vip_proto)s does not match "
                 "pool protocol %(pool_proto)s")
 
+
 class CouldNotPickSubnetForVip(qexception.NotFound):
     message = _("Couldn't pick a subnet for the VIP")
 
+
 class LBaaSinReadOnlyMode(qexception.NeutronException):
     message = _("LBaaS is set to Read-Only and cannot accept CUD operations")
+
+
+class CannotDeleteStandardHealthMonitor(qexception.Conflict):
+    message = _("Cannot delete standard healthmonitor %(hm_name)s")
+
 
 VIPS = 'vips'
 POOLS = 'pools'
