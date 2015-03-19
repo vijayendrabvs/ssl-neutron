@@ -963,6 +963,7 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
             import udns_dns_driver as udns_driver
             udns_client = udns_driver.UdnsClient()
             fully_qualified_name = udns_client.get_PTR_record(cos, ip_address)
+            LOG.info('fqdn for ip address [%s] is [%s]' % (ip_address, fully_qualified_name))
             if fully_qualified_name is not None:
                 return udns_client.delete_A_PTR_record(ip_address, fully_qualified_name, cos)
             else:

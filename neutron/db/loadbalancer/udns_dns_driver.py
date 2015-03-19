@@ -127,10 +127,15 @@ class UdnsClient(object):
             "FORCE_OPERATION": "true"
         }
 
-        fqdn = hostname + '.' + dns_zone
+        fqdn = hostname
+        if action == 'update':
+            fqdn = hostname + '.' + dns_zone
+
         body = {"fqdn": "%s" % fqdn,
                 "ipAddress": "%s" % address
                 }
+
+        LOG.info('udns APTR request payload [%s]' % (body))
 
         url = self._get_APTR_rec_url(dns_zone, view, action)
         response = requests.post(url,
