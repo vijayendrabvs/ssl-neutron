@@ -590,6 +590,15 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
 
     def create_member(self, context, member):
         self.check_lbaas_read_only()
+        # Check if this member IP:port already exists
+        # in the specified pool.
+        mem = member['member']
+        mem_ip = mem['address']
+        mem_port = mem['protocol_port']
+        pool_id = mem['pool_id']
+        mem_ip_exists = self.find_pool_member_by_ip(context.elevated(), pool_id, mem_ip, mem_port)
+        if mem_ip_exists:
+            raise lbaas.MemberAlreadyExistsInPool(member=mem_ip, port=mem_port, pool=pool_id)
         m = super(LoadBalancerPlugin, self).create_member(context, member)
         driver = self._get_driver_for_pool(context, m['pool_id'])
         driver.create_member(context, m)

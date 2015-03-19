@@ -120,6 +120,10 @@ class CannotDeleteStandardHealthMonitor(qexception.Conflict):
     message = _("Cannot delete standard healthmonitor %(hm_name)s")
 
 
+class MemberAlreadyExistsInPool(qexception.Conflict):
+    message = _("Member %(member)s on port %(port)s already present in pool %(pool)s")
+
+
 VIPS = 'vips'
 POOLS = 'pools'
 MEMBERS = 'members'

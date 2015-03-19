@@ -594,6 +594,11 @@ class LoadBalancerPluginDb(LoadBalancerPluginBase,
                 raise loadbalancer.PoolStatsNotFound(pool_id=pool_id)
             context.session.delete(stats)
 
+    def find_pool_member_by_ip(self, context, pool_id, member_ip, member_port):
+        model = Member
+        query = context.session.query(model)
+        return query.filter_by(address=member_ip, protocol_port=member_port, pool_id=pool_id).all()
+
     def create_pool(self, context, pool):
         v = pool['pool']
 
