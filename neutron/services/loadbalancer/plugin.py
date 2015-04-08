@@ -36,6 +36,7 @@ from keystoneclient.v2_0.client import Client
 from neutron.openstack.common import uuidutils
 from keystoneclient.middleware import auth_token
 import json
+import re
 from random import randint
 
 # List of subnets per VPC
@@ -207,6 +208,12 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
         if cfg.CONF.lbaas_read_only:
             raise lbaas.LBaaSinReadOnlyMode()
 
+    def check_name_format(self, name):
+        if re.match("^[a-zA-Z0-9_-]+$", name):
+            return True
+        else:
+            return False
+
     def create_vip(self, context, vip):
         self.check_lbaas_read_only()
         tenant_id = vip['vip']['tenant_id']
@@ -217,12 +224,16 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
         vip_name = vip['vip']['name']
         if not vip_name:
             raise lbaas.LBNameEmpty(entity='Vip')
-        # Next, check if the name is unique.
+
         db_worker = super(LoadBalancerPlugin, self)
+        # Check if the name has any special chars.
+        name_format_ok = self.check_name_format(vip_name)
+        if not name_format_ok:
+            raise lbaas.NameHasSpecialChars(name=vip_name)
+        # Next, check if the name is unique.
         name_present = db_worker.is_name_present(context, vip_name, ldb.Vip)
         if name_present:
             raise lbaas.LBNameNotUnique(entity="Vip")
-
         v = db_worker.create_vip(context, vip)
         driver = self._get_driver_for_pool(context, v['pool_id'])
         driver.create_vip(context, v)
@@ -262,6 +273,10 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
         cert_name = ssl_cert['name']
         if not cert_name:
             raise lbaas_ssl.SSLNameEmpty(entity='Certificate')
+        # Check if the name has any special chars.
+        name_format_ok = self.check_name_format(cert_name)
+        if not name_format_ok:
+            raise lbaas.NameHasSpecialChars(name=cert_name)
         db_worker = super(LoadBalancerPlugin, self)
         name_present = db_worker.is_name_present(context, cert_name, ssldb.SSLCertificate)
         if name_present:
@@ -281,6 +296,10 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
         cert_chain_name = ssl_cert_chain['name']
         if not cert_chain_name:
             raise lbaas_ssl.SSLNameEmpty(entity='Cert Chain')
+        # Check if the name has any special chars.
+        name_format_ok = self.check_name_format(cert_chain_name)
+        if not name_format_ok:
+            raise lbaas.NameHasSpecialChars(name=cert_chain_name)
         db_worker = super(LoadBalancerPlugin, self)
         name_present = db_worker.is_name_present(context, cert_chain_name,
                                                  ssldb.SSLCertificateChain)
@@ -299,6 +318,10 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
         cert_key_name = ssl_cert_key['name']
         if not cert_key_name:
             raise lbaas_ssl.SSLNameEmpty(entity='Cert Key')
+        # Check if the name has any special chars.
+        name_format_ok = self.check_name_format(cert_key_name)
+        if not name_format_ok:
+            raise lbaas.NameHasSpecialChars(name=cert_key_name)
         db_worker = super(LoadBalancerPlugin, self)
         name_present = db_worker.is_name_present(context, cert_key_name,
                                                  ssldb.SSLCertificateKey)
@@ -542,7 +565,10 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
         tenant_cos = self.get_tenant_cos(tenant_id)
         subnet_id = self.pick_subnet_id(pool, tenant_cos)
         p['subnet_id'] = subnet_id
-
+        # Check if the name has any special chars.
+        name_format_ok = self.check_name_format(pool_name)
+        if not name_format_ok:
+            raise lbaas.NameHasSpecialChars(name=pool_name)
         db_worker = super(LoadBalancerPlugin, self)
         name_present = db_worker.is_name_present(context, pool_name,
                                                  ldb.Pool)
@@ -632,6 +658,10 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
         uuid = uuidutils.generate_uuid()
         if not health_m['name']:
             health_m['name'] = "uuid_" + uuid
+        # Check if the name has any special chars.
+        name_format_ok = self.check_name_format(health_m['name'])
+        if not name_format_ok:
+            raise lbaas.NameHasSpecialChars(name=health_m['name'])
         db_worker = super(LoadBalancerPlugin, self)
         name_present = db_worker.is_name_present(context, health_m['name'],
                                                  ldb.HealthMonitor)
@@ -803,6 +833,11 @@ class LoadBalancerPlugin(ldb.LoadBalancerPluginDb,
         if not cert_key_exists:
             raise lbaas_ssl.SSLCertificateKeyNotFound(ssl_key_id=key_id)
 
+        # Check if the name has any special chars.
+        name_format_ok = self.check_name_format(ssl_profile_name)
+        if not name_format_ok:
+            raise lbaas.NameHasSpecialChars(name=ssl_profile_name)
+        db_worker = super(LoadBalancerPlugin, self)
         name_present = db_worker.is_name_present(context, ssl_profile_name,
                                                  ssldb.SSLProfile)
         if name_present:

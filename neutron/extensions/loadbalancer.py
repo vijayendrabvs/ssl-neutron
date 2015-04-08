@@ -44,6 +44,8 @@ class LBNameEmpty(qexception.NeutronException):
 class LBNameNotUnique(qexception.NeutronException):
     message = _("%(entity)s name provided is not unique (names are case insensitive)")
 
+class NameHasSpecialChars(qexception.NeutronException):
+    message = _("Name %(name)s cannot have special characters. Allowed char set is [a-zA-Z0-9_]")
 
 class NotAuthorizedToUseSubnet(qexception.NeutronException):
     message = _("This %(entity)s is not authorized to use the specified subnet")
